@@ -1,4 +1,3 @@
-// admin/grades.php ✅ UPDATED (CSRF for add + safer numeric handling + stable ordering)
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth.php';
@@ -7,10 +6,9 @@ requireLogin('admin');
 $success = $error = '';
 $action  = $_GET['action'] ?? 'list';
 
-/* ===== HANDLE ADD GRADE ===== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_grade'])) {
     if (!csrf_check($_POST['csrf_token'] ?? '')) {
-        $error = "Invalid request (CSRF).";
+        $error = 'Invalid request (CSRF).';
     } else {
         $student_id = (int)($_POST['student_id'] ?? 0);
         $course_id  = (int)($_POST['course_id'] ?? 0);
@@ -19,26 +17,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_grade'])) {
         $total      = (float)($_POST['total_marks'] ?? 100);
         $remarks    = sanitize($conn, $_POST['remarks'] ?? '');
 
-        $pct   = ($total > 0) ? ($obtained / $total) * 100 : 0;
-        $grade = $pct >= 90 ? 'A+' : ($pct >= 80 ? 'A' : ($pct >= 70 ? 'B' : ($pct >= 60 ? 'C' : ($pct >= 50 ? 'D' : 'F'))));
-
-        try {
-            $stmt = mysqli_prepare($conn, "
-                INSERT INTO grades (student_id, course_id, exam_type, marks_obtained, total_marks, grade, remarks)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ");
-            mysqli_stmt_bind_param($stmt, "iisddss", $student_id, $course_id, $exam_type, $obtained, $total, $grade, $remarks);
+        if ($student_id <= 0 || $course_id <= 0) {
+            $error = 'Please select a student and course.';
+        } elseif (!in_array($exam_type, ['Internal', 'Mid-Term', 'Final', 'Assignment'], true)) {
+            $error = 'Invalid exam type.';
+        } elseif ($total <= 0) {
+            $error = 'Total marks must be greater than 0.';
+        } elseif ($obtained < 0) {
+            $error = 'Marks obtained cannot be negative.';
+        } elseif ($obtained > $total) {
+            $error = 'Marks obtained cannot exceed total marks.';
+        } else {
+            $stmt = mysqli_prepare($conn, 'SELECT id FROM students WHERE id=? LIMIT 1');
+            mysqli_stmt_bind_param($stmt, 'i', $student_id);
             mysqli_stmt_execute($stmt);
+            $student_ok = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 
-            $success = "Grade added. Student got <strong>$grade</strong>.";
-            $action = 'list';
-        } catch (Throwable $e) {
-            $error = "Error: " . $e->getMessage();
+            $stmt = mysqli_prepare($conn, 'SELECT id FROM courses WHERE id=? LIMIT 1');
+            mysqli_stmt_bind_param($stmt, 'i', $course_id);
+            mysqli_stmt_execute($stmt);
+            $course_ok = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+
+            if (!$student_ok || !$course_ok) {
+                $error = 'Selected student or course does not exist.';
+            } else {
+                $stmt = mysqli_prepare($conn, 'SELECT id FROM grades WHERE student_id=? AND course_id=? AND exam_type=? LIMIT 1');
+                mysqli_stmt_bind_param($stmt, 'iis', $student_id, $course_id, $exam_type);
+                mysqli_stmt_execute($stmt);
+                $duplicate = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+
+                if ($duplicate) {
+                    $error = 'A grade for this student, course, and exam type already exists.';
+                } else {
+                    $pct   = ($obtained / $total) * 100;
+                    $grade = $pct >= 90 ? 'A+' : ($pct >= 80 ? 'A' : ($pct >= 70 ? 'B' : ($pct >= 60 ? 'C' : ($pct >= 50 ? 'D' : 'F'))));
+
+                    try {
+                        $stmt = mysqli_prepare($conn, "
+                            INSERT INTO grades (student_id, course_id, exam_type, marks_obtained, total_marks, grade, remarks)
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                        ");
+                        mysqli_stmt_bind_param($stmt, 'iisddss', $student_id, $course_id, $exam_type, $obtained, $total, $grade, $remarks);
+                        mysqli_stmt_execute($stmt);
+
+                        $success = "Grade added. Student got {$grade}.";
+                        $action = 'list';
+                    } catch (Throwable $e) {
+                        $error = 'Error: ' . $e->getMessage();
+                    }
+                }
+            }
         }
     }
 }
 
-/* ===== DROPDOWNS ===== */
 $students = mysqli_query($conn, "SELECT id, student_id, name FROM students WHERE status='Active' ORDER BY name");
 $stu_arr = [];
 while ($s = mysqli_fetch_assoc($students)) $stu_arr[] = $s;
@@ -47,7 +79,6 @@ $courses = mysqli_query($conn, "SELECT id, course_code, course_name FROM courses
 $crs_arr = [];
 while ($c = mysqli_fetch_assoc($courses)) $crs_arr[] = $c;
 
-/* ===== LIST ===== */
 $grades = mysqli_query($conn, "
     SELECT g.*, s.name as student_name, s.student_id as stu_id, c.course_code, c.course_name
     FROM grades g
@@ -61,7 +92,7 @@ $grades = mysqli_query($conn, "
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title>Grades – CollegeMS</title>
     <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -79,8 +110,8 @@ $grades = mysqli_query($conn, "
             </div>
         </header>
         <div class="page-content">
-            <?php if ($success): ?><div class="alert alert-success"><?= $success ?></div><?php endif; ?>
-            <?php if ($error):   ?><div class="alert alert-danger"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+            <?php if ($success): ?><div class="alert alert-success"><?= e($success) ?></div><?php endif; ?>
+            <?php if ($error): ?><div class="alert alert-danger"><?= e($error) ?></div><?php endif; ?>
 
             <?php if ($action === 'add'): ?>
             <div class="card">
@@ -90,7 +121,7 @@ $grades = mysqli_query($conn, "
                 </div>
                 <div class="card-body">
                     <form method="POST" id="addForm" onsubmit="return validateForm('addForm')">
-                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
+                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
 
                         <div class="form-grid">
                             <div class="form-group">
@@ -98,7 +129,7 @@ $grades = mysqli_query($conn, "
                                 <select name="student_id" required>
                                     <option value="">Select Student</option>
                                     <?php foreach ($stu_arr as $s): ?>
-                                    <option value="<?= (int)$s['id'] ?>"><?= htmlspecialchars($s['student_id'] . ' - ' . $s['name']) ?></option>
+                                    <option value="<?= (int)$s['id'] ?>"><?= e($s['student_id'] . ' - ' . $s['name']) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -107,7 +138,7 @@ $grades = mysqli_query($conn, "
                                 <select name="course_id" required>
                                     <option value="">Select Course</option>
                                     <?php foreach ($crs_arr as $c): ?>
-                                    <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['course_code'] . ' - ' . $c['course_name']) ?></option>
+                                    <option value="<?= (int)$c['id'] ?>"><?= e($c['course_code'] . ' - ' . $c['course_name']) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -151,24 +182,24 @@ $grades = mysqli_query($conn, "
                         </thead>
                         <tbody>
                             <?php $i=1; while ($g = mysqli_fetch_assoc($grades)):
-                                $pct = $g['total_marks'] > 0 ? round(($g['marks_obtained']/$g['total_marks'])*100) : 0;
+                                $pct = $g['total_marks'] > 0 ? round(($g['marks_obtained'] / $g['total_marks']) * 100) : 0;
                                 $chip = $pct >= 70 ? 'chip-success' : ($pct >= 50 ? 'chip-warning' : 'chip-danger');
                             ?>
                             <tr>
                                 <td><?= $i++ ?></td>
                                 <td>
-                                    <strong><?= htmlspecialchars($g['student_name']) ?></strong><br>
-                                    <small style="color:var(--text-muted)"><?= htmlspecialchars($g['stu_id']) ?></small>
+                                    <strong><?= e($g['student_name']) ?></strong><br>
+                                    <small style="color:var(--text-muted)"><?= e($g['stu_id']) ?></small>
                                 </td>
                                 <td>
-                                    <span class="chip chip-purple"><?= htmlspecialchars($g['course_code']) ?></span><br>
-                                    <small><?= htmlspecialchars($g['course_name']) ?></small>
+                                    <span class="chip chip-purple"><?= e($g['course_code']) ?></span><br>
+                                    <small><?= e($g['course_name']) ?></small>
                                 </td>
-                                <td><span class="chip chip-info"><?= htmlspecialchars($g['exam_type']) ?></span></td>
-                                <td><?= htmlspecialchars($g['marks_obtained']) ?> / <?= htmlspecialchars($g['total_marks']) ?></td>
+                                <td><span class="chip chip-info"><?= e($g['exam_type']) ?></span></td>
+                                <td><?= e($g['marks_obtained']) ?> / <?= e($g['total_marks']) ?></td>
                                 <td><?= (int)$pct ?>%</td>
-                                <td><span class="chip <?= $chip ?>" style="font-size:15px; font-weight:800;"><?= htmlspecialchars($g['grade']) ?></span></td>
-                                <td style="color:var(--text-muted); font-size:13px;"><?= htmlspecialchars($g['remarks'] ?: '—') ?></td>
+                                <td><span class="chip <?= $chip ?>" style="font-size:15px; font-weight:800;"><?= e($g['grade']) ?></span></td>
+                                <td style="color:var(--text-muted); font-size:13px;"><?= e($g['remarks'] ?: '—') ?></td>
                             </tr>
                             <?php endwhile; ?>
                         </tbody>

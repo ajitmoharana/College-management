@@ -5,30 +5,25 @@ requireLogin('student');
 
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 
-$stmt = mysqli_prepare($conn, "SELECT id, student_id FROM students WHERE user_id=? LIMIT 1");
+$stmt = mysqli_prepare($conn, "
+  SELECT s.*, d.name as dept_name
+  FROM students s
+  LEFT JOIN departments d ON s.department_id = d.id
+  WHERE s.user_id = ?
+  LIMIT 1
+");
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);
 $student = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
-if (!$student) { header("Location: ../login.php"); exit(); }
-$student_pk = (int)$student['id'];
 
-$stmt = mysqli_prepare($conn, "
-  SELECT g.*, c.course_code, c.course_name
-  FROM grades g
-  JOIN courses c ON g.course_id = c.id
-  WHERE g.student_id = ?
-  ORDER BY g.created_at DESC, g.id DESC
-");
-mysqli_stmt_bind_param($stmt, "i", $student_pk);
-mysqli_stmt_execute($stmt);
-$grades = mysqli_stmt_get_result($stmt);
+if (!$student) { header("Location: ../login.php"); exit(); }
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>My Grades – CollegeMS</title>
+  <title>Profile – CollegeMS</title>
   <link rel="stylesheet" href="../css/style.css">
 </head>
 <body>
@@ -39,16 +34,16 @@ $grades = mysqli_stmt_get_result($stmt);
       <a href="dashboard.php" class="nav-link"><span class="nav-icon">📊</span> Dashboard</a>
       <a href="courses.php" class="nav-link"><span class="nav-icon">📚</span> My Courses</a>
       <a href="attendance.php" class="nav-link"><span class="nav-icon">✅</span> Attendance</a>
-      <a href="grades.php" class="nav-link active"><span class="nav-icon">📝</span> Grades</a>
+      <a href="grades.php" class="nav-link"><span class="nav-icon">📝</span> Grades</a>
       <a href="notices.php" class="nav-link"><span class="nav-icon">📢</span> Notices</a>
-      <a href="profile.php" class="nav-link"><span class="nav-icon">👤</span> Profile</a>
+      <a href="profile.php" class="nav-link active"><span class="nav-icon">👤</span> Profile</a>
     </nav>
     <div class="sidebar-footer">
       <div class="user-info">
-        <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'] ?? 'S', 0, 1)) ?></div>
+        <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'S', 0, 1))) ?></div>
         <div>
-          <div class="user-name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Student') ?></div>
-          <div class="user-role"><?= htmlspecialchars($student['student_id'] ?? '') ?></div>
+          <div class="user-name"><?= e($_SESSION['user_name'] ?? 'Student') ?></div>
+          <div class="user-role"><?= e($student['student_id']) ?></div>
         </div>
       </div>
       <a href="logout.php" class="btn btn-secondary" style="width:100%; font-size:13px;">🚪 Logout</a>
@@ -59,36 +54,26 @@ $grades = mysqli_stmt_get_result($stmt);
     <header class="topbar">
       <div style="display:flex; align-items:center; gap:15px;">
         <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
-        <div class="topbar-title"><h1>Grades</h1><p>Your grade records</p></div>
+        <div class="topbar-title"><h1>Profile</h1><p>Your student information</p></div>
       </div>
       <div class="topbar-right"><div style="font-size:13px; color:var(--text-muted)"><?= date('D, d M Y') ?></div></div>
     </header>
 
     <div class="page-content">
       <div class="card">
-        <div class="card-header"><h3>📝 Grade Records</h3></div>
-        <div class="table-responsive">
-          <table>
-            <thead><tr><th>Course</th><th>Exam</th><th>Marks</th><th>%</th><th>Grade</th><th>Remarks</th></tr></thead>
-            <tbody>
-            <?php $has=false; while($g=mysqli_fetch_assoc($grades)) { $has=true;
-              $pct = $g['total_marks']>0 ? round(($g['marks_obtained']/$g['total_marks'])*100) : 0;
-              $chip = $pct>=70 ? 'chip-success' : ($pct>=50 ? 'chip-warning' : 'chip-danger');
-            ?>
-              <tr>
-                <td><span class="chip chip-purple"><?= htmlspecialchars($g['course_code']) ?></span><br><small><?= htmlspecialchars($g['course_name']) ?></small></td>
-                <td><span class="chip chip-info"><?= htmlspecialchars($g['exam_type']) ?></span></td>
-                <td><?= htmlspecialchars($g['marks_obtained']) ?> / <?= htmlspecialchars($g['total_marks']) ?></td>
-                <td><?= (int)$pct ?>%</td>
-                <td><span class="chip <?= $chip ?>" style="font-weight:800;"><?= htmlspecialchars($g['grade']) ?></span></td>
-                <td style="color:var(--text-muted);"><?= htmlspecialchars($g['remarks'] ?: '—') ?></td>
-              </tr>
-            <?php } ?>
-            <?php if(!$has): ?>
-              <tr><td colspan="6" style="color:var(--text-muted);">No grades found yet.</td></tr>
-            <?php endif; ?>
-            </tbody>
-          </table>
+        <div class="card-header"><h3>👤 Student Details</h3></div>
+        <div class="card-body">
+          <div class="form-grid">
+            <div class="form-group"><label>Student ID</label><input value="<?= e($student['student_id']) ?>" readonly></div>
+            <div class="form-group"><label>Name</label><input value="<?= e($student['name']) ?>" readonly></div>
+            <div class="form-group"><label>Email</label><input value="<?= e($student['email']) ?>" readonly></div>
+            <div class="form-group"><label>Phone</label><input value="<?= e($student['phone'] ?? '') ?>" readonly></div>
+            <div class="form-group"><label>Department</label><input value="<?= e($student['dept_name'] ?? '') ?>" readonly></div>
+            <div class="form-group"><label>Semester</label><input value="<?= (int)$student['semester'] ?>" readonly></div>
+            <div class="form-group"><label>Status</label><input value="<?= e($student['status']) ?>" readonly></div>
+            <div class="form-group"><label>Admission Year</label><input value="<?= e($student['admission_year']) ?>" readonly></div>
+            <div class="form-group full-width"><label>Address</label><textarea rows="3" readonly><?= e($student['address'] ?? '') ?></textarea></div>
+          </div>
         </div>
       </div>
     </div>

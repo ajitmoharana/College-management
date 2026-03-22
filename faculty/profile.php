@@ -46,10 +46,10 @@ if (!$faculty) { header("Location: ../login.php"); exit(); }
 
     <div class="sidebar-footer">
       <div class="user-info">
-        <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'] ?? 'F', 0, 1)) ?></div>
+        <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'F', 0, 1))) ?></div>
         <div>
-          <div class="user-name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Faculty') ?></div>
-          <div class="user-role"><?= htmlspecialchars($faculty['designation'] ?? 'Faculty') ?></div>
+          <div class="user-name"><?= e($_SESSION['user_name'] ?? 'Faculty') ?></div>
+          <div class="user-role"><?= e($faculty['designation'] ?? 'Faculty') ?></div>
         </div>
       </div>
       <a href="logout.php" class="btn btn-secondary" style="width:100%; font-size:13px;">🚪 Logout</a>
@@ -75,16 +75,16 @@ if (!$faculty) { header("Location: ../login.php"); exit(); }
         <div class="card-header"><h3>👤 Faculty Details</h3></div>
         <div class="card-body">
           <div class="form-grid">
-            <div class="form-group"><label>Faculty ID</label><input value="<?= htmlspecialchars($faculty['faculty_id']) ?>" readonly></div>
-            <div class="form-group"><label>Name</label><input value="<?= htmlspecialchars($faculty['name']) ?>" readonly></div>
-            <div class="form-group"><label>Email</label><input value="<?= htmlspecialchars($faculty['email']) ?>" readonly></div>
-            <div class="form-group"><label>Phone</label><input value="<?= htmlspecialchars($faculty['phone'] ?? '') ?>" readonly></div>
-            <div class="form-group"><label>Department</label><input value="<?= htmlspecialchars($faculty['dept_name'] ?? '') ?>" readonly></div>
-            <div class="form-group"><label>Designation</label><input value="<?= htmlspecialchars($faculty['designation'] ?? '') ?>" readonly></div>
-            <div class="form-group"><label>Qualification</label><input value="<?= htmlspecialchars($faculty['qualification'] ?? '') ?>" readonly></div>
+            <div class="form-group"><label>Faculty ID</label><input value="<?= e($faculty['faculty_id']) ?>" readonly></div>
+            <div class="form-group"><label>Name</label><input value="<?= e($faculty['name']) ?>" readonly></div>
+            <div class="form-group"><label>Email</label><input value="<?= e($faculty['email']) ?>" readonly></div>
+            <div class="form-group"><label>Phone</label><input value="<?= e($faculty['phone'] ?? '') ?>" readonly></div>
+            <div class="form-group"><label>Department</label><input value="<?= e($faculty['dept_name'] ?? '') ?>" readonly></div>
+            <div class="form-group"><label>Designation</label><input value="<?= e($faculty['designation'] ?? '') ?>" readonly></div>
+            <div class="form-group"><label>Qualification</label><input value="<?= e($faculty['qualification'] ?? '') ?>" readonly></div>
             <div class="form-group"><label>Experience (Years)</label><input value="<?= (int)($faculty['experience'] ?? 0) ?>" readonly></div>
-            <div class="form-group"><label>Status</label><input value="<?= htmlspecialchars($faculty['status'] ?? '') ?>" readonly></div>
-            <div class="form-group"><label>Created At</label><input value="<?= htmlspecialchars($faculty['created_at'] ?? '') ?>" readonly></div>
+            <div class="form-group"><label>Status</label><input value="<?= e($faculty['status'] ?? '') ?>" readonly></div>
+            <div class="form-group"><label>Created At</label><input value="<?= e($faculty['created_at'] ?? '') ?>" readonly></div>
           </div>
         </div>
       </div>

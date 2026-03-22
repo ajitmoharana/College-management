@@ -51,10 +51,10 @@ $courses = mysqli_stmt_get_result($stmt);
     </nav>
     <div class="sidebar-footer">
       <div class="user-info">
-        <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'] ?? 'S', 0, 1)) ?></div>
+        <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'S', 0, 1))) ?></div>
         <div>
-          <div class="user-name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Student') ?></div>
-          <div class="user-role"><?= htmlspecialchars($student['student_id'] ?? '') ?></div>
+          <div class="user-name"><?= e($_SESSION['user_name'] ?? 'Student') ?></div>
+          <div class="user-role"><?= e($student['student_id'] ?? '') ?></div>
         </div>
       </div>
       <a href="logout.php" class="btn btn-secondary" style="width:100%; font-size:13px;">🚪 Logout</a>
@@ -79,12 +79,12 @@ $courses = mysqli_stmt_get_result($stmt);
             <tbody>
               <?php $has=false; while($c=mysqli_fetch_assoc($courses)) { $has=true; ?>
               <tr>
-                <td><span class="chip chip-purple"><?= htmlspecialchars($c['course_code']) ?></span></td>
-                <td><?= htmlspecialchars($c['course_name']) ?></td>
-                <td><?= htmlspecialchars($c['dept_name'] ?? '—') ?></td>
+                <td><span class="chip chip-purple"><?= e($c['course_code']) ?></span></td>
+                <td><?= e($c['course_name']) ?></td>
+                <td><?= e($c['dept_name'] ?? '—') ?></td>
                 <td><?= (int)$c['semester'] ?></td>
                 <td><?= (int)$c['credits'] ?></td>
-                <td><?= htmlspecialchars($c['faculty_name'] ?? '—') ?></td>
+                <td><?= e($c['faculty_name'] ?? '—') ?></td>
               </tr>
               <?php } ?>
               <?php if(!$has): ?>

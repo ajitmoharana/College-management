@@ -1,134 +1,185 @@
-// admin/students.php ✅ UPDATED (CSRF + fixed delete + fixed toggle + safe ID generation + transaction)
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth.php';
 requireLogin('admin');
 
 $success = $error = '';
-$action  = $_GET['action'] ?? 'list';
+$action = $_GET['action'] ?? 'list';
 
-/* ===== HANDLE ADD ===== */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
-    $name     = sanitize($conn, $_POST['name']);
-    $email    = sanitize($conn, $_POST['email']);
-    $phone    = sanitize($conn, $_POST['phone']);
-    $dob      = sanitize($conn, $_POST['dob']);
-    $gender   = sanitize($conn, $_POST['gender']);
-    $address  = sanitize($conn, $_POST['address']);
-    $dept_id  = (int)($_POST['department_id'] ?? 0);
-    $semester = (int)($_POST['semester'] ?? 1);
-    $adm_year = (int)($_POST['admission_year'] ?? (int)date('Y'));
-    $password = (string)($_POST['password'] ?? '');
-
-    // Generate student_id using MAX() to avoid COUNT() duplicates
-    $res  = mysqli_query($conn, "SELECT COALESCE(MAX(CAST(SUBSTRING(student_id, 4) AS UNSIGNED)),0) + 1 AS next_num FROM students");
-    $next = (int)(mysqli_fetch_assoc($res)['next_num'] ?? 1);
-    $student_id = 'STU' . str_pad((string)$next, 4, '0', STR_PAD_LEFT);
-
-    mysqli_begin_transaction($conn);
-    try {
-        $hashed = password_hash($password, PASSWORD_DEFAULT);
-
-        $stmt = mysqli_prepare($conn, "INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, 'student')");
-        mysqli_stmt_bind_param($stmt, "sss", $name, $email, $hashed);
-        mysqli_stmt_execute($stmt);
-
-        $user_id = mysqli_insert_id($conn);
-
-        $stmt2 = mysqli_prepare($conn, "
-            INSERT INTO students
-            (user_id, student_id, name, email, phone, dob, gender, address, department_id, semester, admission_year)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-        mysqli_stmt_bind_param(
-            $stmt2,
-            "isssssssiis",
-            $user_id,
-            $student_id,
-            $name,
-            $email,
-            $phone,
-            $dob,
-            $gender,
-            $address,
-            $dept_id,
-            $semester,
-            $adm_year
-        );
-        mysqli_stmt_execute($stmt2);
-
-        mysqli_commit($conn);
-        $success = "Student <strong>$name</strong> added successfully! (ID: $student_id)";
-        $action = 'list';
-    } catch (Throwable $e) {
-        mysqli_rollback($conn);
-        $error = "Error saving student: " . $e->getMessage();
-    }
+function valid_date_or_empty(string $d): bool {
+    if ($d === '') return true;
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) return false;
+    [$y, $m, $day] = array_map('intval', explode('-', $d));
+    return checkdate($m, $day, $y);
 }
 
-/* ===== HANDLE DELETE (POST + CSRF) ===== */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_student'])) {
     if (!csrf_check($_POST['csrf_token'] ?? '')) {
-        $error = "Invalid request (CSRF).";
+        $error = 'Invalid request (CSRF).';
     } else {
-        $del_id = (int)$_POST['delete_id'];
+        $name = sanitize($conn, $_POST['name'] ?? '');
+        $email = sanitize($conn, $_POST['email'] ?? '');
+        $phone = sanitize($conn, $_POST['phone'] ?? '');
+        $dob = sanitize($conn, $_POST['dob'] ?? '');
+        $gender = sanitize($conn, $_POST['gender'] ?? '');
+        $address = sanitize($conn, $_POST['address'] ?? '');
+        $dept_id = (int)($_POST['department_id'] ?? 0);
+        $semester = (int)($_POST['semester'] ?? 1);
+        $adm_year = (int)($_POST['admission_year'] ?? (int)date('Y'));
+        $password = (string)($_POST['password'] ?? '');
 
-        $row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT user_id FROM students WHERE id=$del_id"));
-        $uid = (int)($row['user_id'] ?? 0);
+        if ($name === '' || $email === '' || $password === '') {
+            $error = 'Name, email, and password are required.';
+        } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $error = 'Invalid email address.';
+        } elseif ($dept_id <= 0) {
+            $error = 'Please select a department.';
+        } elseif ($semester < 1 || $semester > 8) {
+            $error = 'Semester must be between 1 and 8.';
+        } elseif ($adm_year < 2000 || $adm_year > 2035) {
+            $error = 'Admission year is out of range.';
+        } elseif (!in_array($gender, ['', 'Male', 'Female', 'Other'], true)) {
+            $error = 'Invalid gender.';
+        } elseif (!valid_date_or_empty($dob)) {
+            $error = 'Invalid date of birth.';
+        } else {
+            $checkDept = mysqli_prepare($conn, 'SELECT id FROM departments WHERE id=? LIMIT 1');
+            mysqli_stmt_bind_param($checkDept, 'i', $dept_id);
+            mysqli_stmt_execute($checkDept);
+            $deptRow = mysqli_fetch_assoc(mysqli_stmt_get_result($checkDept));
 
-        mysqli_begin_transaction($conn);
-        try {
-            mysqli_query($conn, "DELETE FROM students WHERE id=$del_id");
-            if ($uid > 0) {
-                mysqli_query($conn, "DELETE FROM users WHERE id=$uid");
+            if (!$deptRow) {
+                $error = 'Selected department does not exist.';
+            } else {
+                mysqli_begin_transaction($conn);
+                try {
+                    $stmt = mysqli_prepare($conn, 'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, "student")');
+                    $hashed = password_hash($password, PASSWORD_DEFAULT);
+                    mysqli_stmt_bind_param($stmt, 'sss', $name, $email, $hashed);
+                    mysqli_stmt_execute($stmt);
+
+                    $user_id = mysqli_insert_id($conn);
+                    $student_id = 'STU' . str_pad((string)$user_id, 4, '0', STR_PAD_LEFT);
+
+                    $stmt2 = mysqli_prepare($conn, '
+                        INSERT INTO students
+                        (user_id, student_id, name, email, phone, dob, gender, address, department_id, semester, admission_year)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ');
+                    mysqli_stmt_bind_param(
+                        $stmt2,
+                        'isssssssiii',
+                        $user_id,
+                        $student_id,
+                        $name,
+                        $email,
+                        $phone,
+                        $dob,
+                        $gender,
+                        $address,
+                        $dept_id,
+                        $semester,
+                        $adm_year
+                    );
+                    mysqli_stmt_execute($stmt2);
+
+                    mysqli_commit($conn);
+                    $success = "Student {$name} added successfully. ID: {$student_id}";
+                    $action = 'list';
+                } catch (Throwable $e) {
+                    mysqli_rollback($conn);
+                    $error = 'Error saving student: ' . $e->getMessage();
+                }
             }
-            mysqli_commit($conn);
-            $success = "Student deleted successfully.";
-        } catch (Throwable $e) {
-            mysqli_rollback($conn);
-            $error = "Delete failed: " . $e->getMessage();
         }
     }
 }
 
-/* ===== HANDLE STATUS TOGGLE (POST + CSRF) ===== */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_id'])) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
     if (!csrf_check($_POST['csrf_token'] ?? '')) {
-        $error = "Invalid request (CSRF).";
+        $error = 'Invalid request (CSRF).';
     } else {
-        $tid = (int)$_POST['toggle_id'];
-        $curRow = mysqli_fetch_assoc(mysqli_query($conn, "SELECT status FROM students WHERE id=$tid"));
-        $cur = $curRow['status'] ?? 'Active';
-        $new = ($cur === 'Active') ? 'Inactive' : 'Active';
+        $del_id = (int)$_POST['delete_id'];
 
-        mysqli_query($conn, "UPDATE students SET status='$new' WHERE id=$tid");
-        $success = "Status updated.";
+        $stmt = mysqli_prepare($conn, 'SELECT user_id FROM students WHERE id=? LIMIT 1');
+        mysqli_stmt_bind_param($stmt, 'i', $del_id);
+        mysqli_stmt_execute($stmt);
+        $row = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+        $uid = (int)($row['user_id'] ?? 0);
+
+        mysqli_begin_transaction($conn);
+        try {
+            $stmt = mysqli_prepare($conn, 'DELETE FROM students WHERE id=?');
+            mysqli_stmt_bind_param($stmt, 'i', $del_id);
+            mysqli_stmt_execute($stmt);
+
+            if ($uid > 0) {
+                $stmt = mysqli_prepare($conn, 'DELETE FROM users WHERE id=?');
+                mysqli_stmt_bind_param($stmt, 'i', $uid);
+                mysqli_stmt_execute($stmt);
+            }
+
+            mysqli_commit($conn);
+            $success = 'Student deleted successfully.';
+        } catch (Throwable $e) {
+            mysqli_rollback($conn);
+            $error = 'Delete failed: ' . $e->getMessage();
+        }
     }
 }
 
-/* ===== Fetch departments for dropdown ===== */
-$departments = mysqli_query($conn, "SELECT id, name FROM departments ORDER BY name");
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['toggle_id'])) {
+    if (!csrf_check($_POST['csrf_token'] ?? '')) {
+        $error = 'Invalid request (CSRF).';
+    } else {
+        $tid = (int)$_POST['toggle_id'];
+
+        $stmt = mysqli_prepare($conn, 'SELECT status FROM students WHERE id=? LIMIT 1');
+        mysqli_stmt_bind_param($stmt, 'i', $tid);
+        mysqli_stmt_execute($stmt);
+        $curRow = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+        $cur = $curRow['status'] ?? 'Active';
+        $new = ($cur === 'Active') ? 'Inactive' : 'Active';
+
+        $stmt = mysqli_prepare($conn, 'UPDATE students SET status=? WHERE id=?');
+        mysqli_stmt_bind_param($stmt, 'si', $new, $tid);
+        mysqli_stmt_execute($stmt);
+        $success = 'Status updated.';
+    }
+}
+
+$departments = mysqli_query($conn, 'SELECT id, name FROM departments ORDER BY name');
 $depts_arr = [];
 while ($d = mysqli_fetch_assoc($departments)) $depts_arr[] = $d;
 
-/* ===== Fetch all students ===== */
-$search = sanitize($conn, $_GET['search'] ?? '');
-$where  = $search ? "WHERE s.name LIKE '%$search%' OR s.student_id LIKE '%$search%' OR s.email LIKE '%$search%'" : '';
-
-$students = mysqli_query($conn, "
-    SELECT s.*, d.name as dept_name
-    FROM students s
-    LEFT JOIN departments d ON s.department_id = d.id
-    $where
-    ORDER BY s.created_at DESC
-");
+$search = trim((string)($_GET['search'] ?? ''));
+if ($search !== '') {
+    $like = '%' . $search . '%';
+    $stmt = mysqli_prepare($conn, '
+        SELECT s.*, d.name as dept_name
+        FROM students s
+        LEFT JOIN departments d ON s.department_id = d.id
+        WHERE s.name LIKE ? OR s.student_id LIKE ? OR s.email LIKE ?
+        ORDER BY s.created_at DESC
+    ');
+    mysqli_stmt_bind_param($stmt, 'sss', $like, $like, $like);
+    mysqli_stmt_execute($stmt);
+    $students = mysqli_stmt_get_result($stmt);
+} else {
+    $students = mysqli_query($conn, '
+        SELECT s.*, d.name as dept_name
+        FROM students s
+        LEFT JOIN departments d ON s.department_id = d.id
+        ORDER BY s.created_at DESC
+    ');
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title>Students – CollegeMS</title>
     <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -151,8 +202,8 @@ $students = mysqli_query($conn, "
         </header>
 
         <div class="page-content">
-            <?php if ($success): ?><div class="alert alert-success"><?= $success ?></div><?php endif; ?>
-            <?php if ($error):   ?><div class="alert alert-danger"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+            <?php if ($success): ?><div class="alert alert-success"><?= e($success) ?></div><?php endif; ?>
+            <?php if ($error): ?><div class="alert alert-danger"><?= e($error) ?></div><?php endif; ?>
 
             <?php if ($action === 'add'): ?>
             <div class="card">
@@ -162,6 +213,8 @@ $students = mysqli_query($conn, "
                 </div>
                 <div class="card-body">
                     <form method="POST" id="addForm" onsubmit="return validateForm('addForm')">
+                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+
                         <div class="form-grid">
                             <div class="form-group">
                                 <label>Full Name *</label>
@@ -193,14 +246,14 @@ $students = mysqli_query($conn, "
                                 <select name="department_id" required>
                                     <option value="">Select Department</option>
                                     <?php foreach ($depts_arr as $d): ?>
-                                    <option value="<?= (int)$d['id'] ?>"><?= htmlspecialchars($d['name']) ?></option>
+                                    <option value="<?= (int)$d['id'] ?>"><?= e($d['name']) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                             <div class="form-group">
                                 <label>Semester</label>
                                 <select name="semester">
-                                    <?php for ($i=1; $i<=8; $i++): ?>
+                                    <?php for ($i = 1; $i <= 8; $i++): ?>
                                     <option value="<?= $i ?>"><?= $i ?></option>
                                     <?php endfor; ?>
                                 </select>
@@ -232,7 +285,7 @@ $students = mysqli_query($conn, "
                     <h3>👨‍🎓 All Students</h3>
                     <form method="GET" style="display:flex; gap:8px;">
                         <input type="text" name="search" placeholder="Search students..."
-                               value="<?= htmlspecialchars($search) ?>"
+                               value="<?= e($search) ?>"
                                style="background:rgba(255,255,255,0.06); border:1px solid var(--border); border-radius:8px; padding:8px 14px; color:var(--text); font-size:14px; outline:none;">
                         <button type="submit" class="btn btn-secondary btn-sm">🔍</button>
                     </form>
@@ -247,24 +300,24 @@ $students = mysqli_query($conn, "
                             </tr>
                         </thead>
                         <tbody>
-                            <?php $i=1; while ($s = mysqli_fetch_assoc($students)): ?>
+                            <?php $i = 1; while ($s = mysqli_fetch_assoc($students)): ?>
                             <tr>
                                 <td><?= $i++ ?></td>
-                                <td><code style="color:var(--accent)"><?= htmlspecialchars($s['student_id']) ?></code></td>
-                                <td><strong><?= htmlspecialchars($s['name']) ?></strong></td>
-                                <td style="color:var(--text-muted)"><?= htmlspecialchars($s['email']) ?></td>
-                                <td><?= htmlspecialchars($s['dept_name'] ?? 'N/A') ?></td>
+                                <td><code style="color:var(--accent)"><?= e($s['student_id']) ?></code></td>
+                                <td><strong><?= e($s['name']) ?></strong></td>
+                                <td style="color:var(--text-muted)"><?= e($s['email']) ?></td>
+                                <td><?= e($s['dept_name'] ?? 'N/A') ?></td>
                                 <td><?= (int)$s['semester'] ?></td>
-                                <td><?= htmlspecialchars($s['admission_year']) ?></td>
+                                <td><?= e($s['admission_year']) ?></td>
                                 <td>
                                     <span class="chip <?= $s['status'] === 'Active' ? 'chip-success' : ($s['status'] === 'Graduated' ? 'chip-info' : 'chip-warning') ?>">
-                                        <?= htmlspecialchars($s['status']) ?>
+                                        <?= e($s['status']) ?>
                                     </span>
                                 </td>
                                 <td>
                                     <div style="display:flex; gap:6px;">
                                         <form method="POST" style="display:inline;">
-                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
+                                            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                                             <input type="hidden" name="toggle_id" value="<?= (int)$s['id'] ?>">
                                             <button type="submit" class="btn btn-warning btn-sm" title="Toggle Status">⇄</button>
                                         </form>

@@ -1,4 +1,3 @@
-// student/dashboard.php ✅ UPDATED (fix logout link, reduce repeated queries, safer queries)
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth.php';
@@ -6,7 +5,6 @@ requireLogin('student');
 
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 
-/* ===== Get student record (prepared) ===== */
 $stmt = mysqli_prepare($conn, "
     SELECT s.*, d.name as dept_name
     FROM students s
@@ -22,7 +20,6 @@ if (!$student) { header("Location: ../login.php"); exit(); }
 
 $student_pk = (int)$student['id'];
 
-/* ===== Attendance summary (prepared) ===== */
 $stmt = mysqli_prepare($conn, "
     SELECT 
         COUNT(*) as total,
@@ -39,7 +36,6 @@ $att_total = (int)($att['total'] ?? 0);
 $att_present = (int)($att['present'] ?? 0);
 $att_pct = $att_total > 0 ? round(($att_present / $att_total) * 100) : 0;
 
-/* ===== Counts (prepared) ===== */
 $stmt = mysqli_prepare($conn, "SELECT COUNT(*) AS cnt FROM enrollments WHERE student_id=?");
 mysqli_stmt_bind_param($stmt, "i", $student_pk);
 mysqli_stmt_execute($stmt);
@@ -50,7 +46,6 @@ mysqli_stmt_bind_param($stmt, "i", $student_pk);
 mysqli_stmt_execute($stmt);
 $grades_count = (int)(mysqli_fetch_assoc(mysqli_stmt_get_result($stmt))['cnt'] ?? 0);
 
-/* ===== Enrolled courses (prepared) ===== */
 $stmt = mysqli_prepare($conn, "
     SELECT c.course_code, c.course_name, c.credits, f.name as faculty_name
     FROM enrollments e
@@ -63,7 +58,6 @@ mysqli_stmt_bind_param($stmt, "i", $student_pk);
 mysqli_stmt_execute($stmt);
 $courses = mysqli_stmt_get_result($stmt);
 
-/* ===== Recent grades (prepared) ===== */
 $stmt = mysqli_prepare($conn, "
     SELECT g.marks_obtained, g.total_marks, g.grade, g.exam_type, c.course_code, c.course_name
     FROM grades g
@@ -76,7 +70,6 @@ mysqli_stmt_bind_param($stmt, "i", $student_pk);
 mysqli_stmt_execute($stmt);
 $grades = mysqli_stmt_get_result($stmt);
 
-/* ===== Notices (prepared) ===== */
 $stmt = mysqli_prepare($conn, "
     SELECT n.title, n.content, n.created_at, u.name as author
     FROM notices n
@@ -98,7 +91,6 @@ $notices = mysqli_stmt_get_result($stmt);
 </head>
 <body>
 <div class="dashboard-layout">
-    <!-- STUDENT SIDEBAR -->
     <aside class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <div class="logo-icon">🎓</div>
@@ -114,14 +106,13 @@ $notices = mysqli_stmt_get_result($stmt);
         </nav>
         <div class="sidebar-footer">
             <div class="user-info">
-                <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'], 0, 1)) ?></div>
+                <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'S', 0, 1))) ?></div>
                 <div>
-                    <div class="user-name"><?= htmlspecialchars($_SESSION['user_name']) ?></div>
-                    <div class="user-role"><?= htmlspecialchars($student['student_id']) ?></div>
+                    <div class="user-name"><?= e($_SESSION['user_name'] ?? 'Student') ?></div>
+                    <div class="user-role"><?= e($student['student_id']) ?></div>
                 </div>
             </div>
-            <!-- ✅ FIXED logout -->
-            <a href="logout.php" class="btn btn-secondary" style="width:100%; font-size:13px;" onclick="sessionStorage.clear()">🚪 Logout</a>
+            <a href="logout.php" class="btn btn-secondary" style="width:100%; font-size:13px;">🚪 Logout</a>
         </div>
     </aside>
 
@@ -131,7 +122,7 @@ $notices = mysqli_stmt_get_result($stmt);
                 <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
                 <div class="topbar-title">
                     <h1>My Dashboard</h1>
-                    <p><?= htmlspecialchars($student['dept_name'] ?? '') ?> · Semester <?= (int)$student['semester'] ?></p>
+                    <p><?= e($student['dept_name'] ?? '') ?> · Semester <?= (int)$student['semester'] ?></p>
                 </div>
             </div>
             <div class="topbar-right">
@@ -140,7 +131,6 @@ $notices = mysqli_stmt_get_result($stmt);
         </header>
 
         <div class="page-content">
-            <!-- STATS -->
             <div class="stats-grid">
                 <div class="stat-card" style="--stat-color:#3b82f6">
                     <div class="stat-icon">📚</div>
@@ -171,63 +161,69 @@ $notices = mysqli_stmt_get_result($stmt);
             </div>
 
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:25px;">
-                <!-- MY COURSES -->
                 <div class="card">
                     <div class="card-header"><h3>📚 My Courses</h3></div>
                     <div class="table-responsive">
                         <table>
                             <thead><tr><th>Code</th><th>Course</th><th>Faculty</th><th>Cr</th></tr></thead>
                             <tbody>
-                                <?php while ($c = mysqli_fetch_assoc($courses)): ?>
+                                <?php $hasCourses = false; while ($c = mysqli_fetch_assoc($courses)): $hasCourses = true; ?>
                                 <tr>
-                                    <td><span class="chip chip-purple"><?= htmlspecialchars($c['course_code']) ?></span></td>
-                                    <td><?= htmlspecialchars($c['course_name']) ?></td>
-                                    <td style="font-size:12px; color:var(--text-muted)"><?= htmlspecialchars($c['faculty_name'] ?? '—') ?></td>
+                                    <td><span class="chip chip-purple"><?= e($c['course_code']) ?></span></td>
+                                    <td><?= e($c['course_name']) ?></td>
+                                    <td style="font-size:12px; color:var(--text-muted)"><?= e($c['faculty_name'] ?? '—') ?></td>
                                     <td><?= (int)$c['credits'] ?></td>
                                 </tr>
                                 <?php endwhile; ?>
+                                <?php if (!$hasCourses): ?>
+                                <tr><td colspan="4" style="color:var(--text-muted);">No courses enrolled yet.</td></tr>
+                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
-                <!-- RECENT GRADES -->
                 <div class="card">
                     <div class="card-header"><h3>📝 Recent Grades</h3></div>
                     <div class="table-responsive">
                         <table>
                             <thead><tr><th>Course</th><th>Type</th><th>Score</th><th>Grade</th></tr></thead>
                             <tbody>
-                                <?php while ($g = mysqli_fetch_assoc($grades)):
-                                    $pct = ($g['total_marks'] > 0) ? round(($g['marks_obtained']/$g['total_marks'])*100) : 0;
+                                <?php $hasGrades = false; while ($g = mysqli_fetch_assoc($grades)): $hasGrades = true;
+                                    $pct = ($g['total_marks'] > 0) ? round(($g['marks_obtained'] / $g['total_marks']) * 100) : 0;
                                     $chip = $pct >= 70 ? 'chip-success' : ($pct >= 50 ? 'chip-warning' : 'chip-danger');
                                 ?>
                                 <tr>
-                                    <td><span class="chip chip-purple"><?= htmlspecialchars($g['course_code']) ?></span></td>
-                                    <td style="font-size:12px"><?= htmlspecialchars($g['exam_type']) ?></td>
-                                    <td><?= htmlspecialchars($g['marks_obtained']) ?>/<?= htmlspecialchars($g['total_marks']) ?></td>
-                                    <td><span class="chip <?= $chip ?>" style="font-weight:800"><?= htmlspecialchars($g['grade']) ?></span></td>
+                                    <td><span class="chip chip-purple"><?= e($g['course_code']) ?></span></td>
+                                    <td style="font-size:12px"><?= e($g['exam_type']) ?></td>
+                                    <td><?= e($g['marks_obtained']) ?>/<?= e($g['total_marks']) ?></td>
+                                    <td><span class="chip <?= $chip ?>" style="font-weight:800"><?= e($g['grade']) ?></span></td>
                                 </tr>
                                 <?php endwhile; ?>
+                                <?php if (!$hasGrades): ?>
+                                <tr><td colspan="4" style="color:var(--text-muted);">No grades yet.</td></tr>
+                                <?php endif; ?>
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
 
-            <!-- NOTICES -->
             <div class="card" style="margin-top:25px;">
                 <div class="card-header"><h3>📢 Latest Notices</h3></div>
                 <div class="card-body" style="padding:15px;">
-                    <?php while ($n = mysqli_fetch_assoc($notices)): ?>
+                    <?php $hasNotices = false; while ($n = mysqli_fetch_assoc($notices)): $hasNotices = true; ?>
                     <div style="padding:15px; border-bottom:1px solid var(--border);">
-                        <div style="font-weight:600; margin-bottom:5px;"><?= htmlspecialchars($n['title']) ?></div>
+                        <div style="font-weight:600; margin-bottom:5px;"><?= e($n['title']) ?></div>
                         <div style="font-size:13px; color:var(--text-muted); margin-bottom:5px; line-height:1.5">
-                            <?= htmlspecialchars(substr($n['content'], 0, 200)) ?>...
+                            <?= e(mb_strimwidth($n['content'], 0, 200, '...')) ?>
                         </div>
                         <div style="font-size:11px; color:var(--text-muted)"><?= date('d M Y', strtotime($n['created_at'])) ?></div>
                     </div>
                     <?php endwhile; ?>
+                    <?php if (!$hasNotices): ?>
+                    <div style="color:var(--text-muted);">No notices available.</div>
+                    <?php endif; ?>
                 </div>
             </div>
 

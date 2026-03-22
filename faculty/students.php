@@ -5,7 +5,6 @@ requireLogin('faculty');
 
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 
-/* ===== Get faculty record ===== */
 $stmt = mysqli_prepare($conn, "SELECT id, name FROM faculty WHERE user_id=? LIMIT 1");
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);
@@ -14,7 +13,6 @@ if (!$faculty) { header("Location: ../login.php"); exit(); }
 
 $faculty_pk = (int)$faculty['id'];
 
-/* ===== Fetch faculty courses for dropdown ===== */
 $stmt = mysqli_prepare($conn, "SELECT id, course_code, course_name FROM courses WHERE faculty_id=? ORDER BY course_code");
 mysqli_stmt_bind_param($stmt, "i", $faculty_pk);
 mysqli_stmt_execute($stmt);
@@ -23,12 +21,10 @@ $course_rs = mysqli_stmt_get_result($stmt);
 $courses_arr = [];
 while ($c = mysqli_fetch_assoc($course_rs)) $courses_arr[] = $c;
 
-/* ===== Selected course ===== */
 $selected_course = (int)($_GET['course_id'] ?? 0);
 $students_rs = null;
 
 if ($selected_course > 0) {
-    // Ensure selected course belongs to this faculty
     $stmt = mysqli_prepare($conn, "SELECT id FROM courses WHERE id=? AND faculty_id=? LIMIT 1");
     mysqli_stmt_bind_param($stmt, "ii", $selected_course, $faculty_pk);
     mysqli_stmt_execute($stmt);
@@ -47,7 +43,7 @@ if ($selected_course > 0) {
         mysqli_stmt_execute($stmt);
         $students_rs = mysqli_stmt_get_result($stmt);
     } else {
-        $selected_course = 0; // invalid selection
+        $selected_course = 0;
     }
 }
 ?>
@@ -78,9 +74,9 @@ if ($selected_course > 0) {
 
     <div class="sidebar-footer">
       <div class="user-info">
-        <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'] ?? 'F', 0, 1)) ?></div>
+        <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'F', 0, 1))) ?></div>
         <div>
-          <div class="user-name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Faculty') ?></div>
+          <div class="user-name"><?= e($_SESSION['user_name'] ?? 'Faculty') ?></div>
           <div class="user-role">Faculty</div>
         </div>
       </div>
@@ -103,8 +99,6 @@ if ($selected_course > 0) {
     </header>
 
     <div class="page-content">
-
-      <!-- FILTER -->
       <div class="card" style="margin-bottom:25px;">
         <div class="card-header"><h3>🔍 Select Course</h3></div>
         <div class="card-body">
@@ -115,7 +109,7 @@ if ($selected_course > 0) {
                 <option value="">Select Course</option>
                 <?php foreach ($courses_arr as $c): ?>
                   <option value="<?= (int)$c['id'] ?>" <?= $selected_course === (int)$c['id'] ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($c['course_code'] . ' - ' . $c['course_name']) ?>
+                    <?= e($c['course_code'] . ' - ' . $c['course_name']) ?>
                   </option>
                 <?php endforeach; ?>
               </select>
@@ -124,7 +118,6 @@ if ($selected_course > 0) {
         </div>
       </div>
 
-      <!-- LIST -->
       <div class="card">
         <div class="card-header"><h3>👨‍🎓 Enrolled Students</h3></div>
         <div class="table-responsive">
@@ -143,12 +136,12 @@ if ($selected_course > 0) {
               ?>
                 <tr>
                   <td><?= $i++ ?></td>
-                  <td><span class="chip chip-purple"><?= htmlspecialchars($s['student_id']) ?></span></td>
-                  <td><strong><?= htmlspecialchars($s['name']) ?></strong></td>
-                  <td style="color:var(--text-muted)"><?= htmlspecialchars($s['email']) ?></td>
-                  <td><?= htmlspecialchars($s['dept_name'] ?? '—') ?></td>
+                  <td><span class="chip chip-purple"><?= e($s['student_id']) ?></span></td>
+                  <td><strong><?= e($s['name']) ?></strong></td>
+                  <td style="color:var(--text-muted)"><?= e($s['email']) ?></td>
+                  <td><?= e($s['dept_name'] ?? '—') ?></td>
                   <td><?= (int)$s['semester'] ?></td>
-                  <td><span class="chip <?= $chip ?>"><?= htmlspecialchars($s['status']) ?></span></td>
+                  <td><span class="chip <?= $chip ?>"><?= e($s['status']) ?></span></td>
                 </tr>
               <?php }} ?>
 

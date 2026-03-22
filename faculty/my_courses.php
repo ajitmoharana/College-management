@@ -5,7 +5,6 @@ requireLogin('faculty');
 
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 
-// faculty record
 $stmt = mysqli_prepare($conn, "SELECT id, name FROM faculty WHERE user_id=? LIMIT 1");
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);
@@ -47,8 +46,8 @@ $courses = mysqli_stmt_get_result($stmt);
     </nav>
     <div class="sidebar-footer">
       <div class="user-info">
-        <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'] ?? 'F', 0, 1)) ?></div>
-        <div><div class="user-name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Faculty') ?></div><div class="user-role">Faculty</div></div>
+        <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'F', 0, 1))) ?></div>
+        <div><div class="user-name"><?= e($_SESSION['user_name'] ?? 'Faculty') ?></div><div class="user-role">Faculty</div></div>
       </div>
       <a href="logout.php" class="btn btn-secondary" style="width:100%; font-size:13px;">🚪 Logout</a>
     </div>
@@ -72,8 +71,8 @@ $courses = mysqli_stmt_get_result($stmt);
             <tbody>
               <?php $has=false; while($c=mysqli_fetch_assoc($courses)) { $has=true; ?>
               <tr>
-                <td><span class="chip chip-purple"><?= htmlspecialchars($c['course_code']) ?></span></td>
-                <td><?= htmlspecialchars($c['course_name']) ?></td>
+                <td><span class="chip chip-purple"><?= e($c['course_code']) ?></span></td>
+                <td><?= e($c['course_name']) ?></td>
                 <td><?= (int)$c['semester'] ?></td>
                 <td><span class="chip chip-info"><?= (int)$c['credits'] ?> cr</span></td>
                 <td><span class="chip chip-success"><?= (int)$c['enrolled_students'] ?></span></td>

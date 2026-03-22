@@ -1,9 +1,7 @@
-// js/main.js ✅ UPDATED (sidebar toggle + alerts + ACTIVE link + unified confirmDelete POST+CSRF)
 function toggleSidebar() {
   document.querySelector(".sidebar")?.classList.toggle("open");
 }
 
-// ===== AUTO DISMISS ALERTS + ACTIVE LINK =====
 document.addEventListener("DOMContentLoaded", () => {
   const alerts = document.querySelectorAll(".alert");
   alerts.forEach((alert) => {
@@ -15,19 +13,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 4000);
   });
 
-  // Highlight active nav link (optional)
   const links = document.querySelectorAll(".nav-link");
-  const current = window.location.pathname;
+  const currentPath = window.location.pathname.split("/").pop();
   links.forEach((link) => {
     const href = link.getAttribute("href");
-    if (href && current.includes(href)) link.classList.add("active");
+    if (href && href === currentPath) {
+      link.classList.add("active");
+    }
   });
 });
 
-// ===== CONFIRM DELETE (POST + CSRF) =====
-// Usage in PHP:
-// <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
-// <a href="#" onclick="confirmDelete(ID,'file.php')" ...>🗑</a>
 function confirmDelete(id, endpoint) {
   if (!confirm("Are you sure you want to delete this record? This action cannot be undone.")) return;
 
@@ -53,7 +48,6 @@ function confirmDelete(id, endpoint) {
   form.submit();
 }
 
-// ===== SEARCH TABLE =====
 function searchTable(inputId, tableId) {
   const input = document.getElementById(inputId);
   if (!input) return;
@@ -65,14 +59,13 @@ function searchTable(inputId, tableId) {
   });
 }
 
-// ===== FORM VALIDATION =====
 function validateForm(formId) {
   const form = document.getElementById(formId);
   if (!form) return true;
   const inputs = form.querySelectorAll("[required]");
   let valid = true;
   inputs.forEach((input) => {
-    if (!input.value.trim()) {
+    if (!String(input.value).trim()) {
       input.style.borderColor = "var(--danger)";
       valid = false;
     } else {
@@ -82,7 +75,6 @@ function validateForm(formId) {
   return valid;
 }
 
-// ===== PRINT PAGE =====
 function printPage() {
   window.print();
 }

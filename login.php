@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="POST" onsubmit="return validateForm('loginForm')" id="loginForm">
             <div class="form-group">
                 <label>Email Address</label>
-                <input type="email" name="email" placeholder="your@email.edu" required
+                <input type="email" name="email" placeholder="Enter your email" required
                        value="<?= htmlspecialchars($_POST['email'] ?? '') ?>">
             </div>
             <div class="form-group">

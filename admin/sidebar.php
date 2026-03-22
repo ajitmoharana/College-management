@@ -1,4 +1,3 @@
-// admin/sidebar.php ✅ UPDATED (adds htmlspecialchars + works with csrf meta from pages)
 <?php
 $current_page = basename($_SERVER['PHP_SELF']);
 ?>
@@ -45,9 +44,9 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     <div class="sidebar-footer">
         <div class="user-info">
-            <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'] ?? 'A', 0, 1)) ?></div>
+            <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'A', 0, 1))) ?></div>
             <div>
-                <div class="user-name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Admin') ?></div>
+                <div class="user-name"><?= e($_SESSION['user_name'] ?? 'Admin') ?></div>
                 <div class="user-role">Administrator</div>
             </div>
         </div>

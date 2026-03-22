@@ -1,4 +1,3 @@
-// includes/auth.php ✅ UPDATED (portable redirects + CSRF helpers)
 <?php
 session_start();
 
@@ -10,15 +9,22 @@ function getRole(): string {
     return $_SESSION['role'] ?? '';
 }
 
-// Detect base path automatically (e.g., /college-management)
 function basePath(): string {
-    $script = $_SERVER['SCRIPT_NAME'] ?? '';
-    $parts  = explode('/', trim($script, '/'));
-    return '/' . ($parts[0] ?? '');
+    $script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '');
+    $dir = rtrim(dirname($script), '/');
+
+    foreach (['/admin', '/faculty', '/student', '/includes'] as $suffix) {
+        if ($dir !== '' && substr($dir, -strlen($suffix)) === $suffix) {
+            $dir = substr($dir, 0, -strlen($suffix));
+            break;
+        }
+    }
+
+    return $dir === '' ? '/' : $dir;
 }
 
 function redirectToLogin(): void {
-    header("Location: " . basePath() . "/login.php");
+    header('Location: ' . basePath() . '/login.php');
     exit();
 }
 
@@ -26,17 +32,20 @@ function requireLogin(?string $role = null): void {
     if (!isLoggedIn()) {
         redirectToLogin();
     }
-    if ($role && getRole() !== $role) {
+
+    if ($role !== null && getRole() !== $role) {
         redirectToLogin();
     }
 }
 
-// Keep sanitize for basic trimming + safe display, but use prepared statements for SQL safety
 function sanitize($conn, $data): string {
-    return mysqli_real_escape_string($conn, htmlspecialchars(strip_tags(trim((string)$data))));
+    return trim((string)$data);
 }
 
-/* ========= CSRF ========= */
+function e($value): string {
+    return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+}
+
 function csrf_token(): string {
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -45,6 +54,8 @@ function csrf_token(): string {
 }
 
 function csrf_check($token): bool {
-    return isset($_SESSION['csrf_token']) && is_string($token) && hash_equals($_SESSION['csrf_token'], $token);
+    return isset($_SESSION['csrf_token'])
+        && is_string($token)
+        && hash_equals($_SESSION['csrf_token'], $token);
 }
 ?>

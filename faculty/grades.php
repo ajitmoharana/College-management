@@ -7,7 +7,6 @@ $success = $error = '';
 
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 
-/* ===== Faculty record ===== */
 $stmt = mysqli_prepare($conn, "SELECT id FROM faculty WHERE user_id=? LIMIT 1");
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);
@@ -15,7 +14,6 @@ $faculty = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 if (!$faculty) { header("Location: ../login.php"); exit(); }
 $faculty_pk = (int)$faculty['id'];
 
-/* ===== Courses (only my courses) ===== */
 $stmt = mysqli_prepare($conn, "SELECT id, course_code, course_name FROM courses WHERE faculty_id=? ORDER BY course_code");
 mysqli_stmt_bind_param($stmt, "i", $faculty_pk);
 mysqli_stmt_execute($stmt);
@@ -24,10 +22,8 @@ $crs = mysqli_stmt_get_result($stmt);
 $courses_arr = [];
 while ($c = mysqli_fetch_assoc($crs)) $courses_arr[] = $c;
 
-/* ===== Selected course ===== */
 $selected_course = (int)($_GET['course_id'] ?? ($_POST['course_id'] ?? 0));
 
-/* ===== Make sure selected course belongs to faculty ===== */
 $course_ok = false;
 if ($selected_course > 0) {
     $stmt = mysqli_prepare($conn, "SELECT id FROM courses WHERE id=? AND faculty_id=? LIMIT 1");
@@ -37,7 +33,6 @@ if ($selected_course > 0) {
     if (!$course_ok) $selected_course = 0;
 }
 
-/* ===== Enrolled students dropdown (for selected course) ===== */
 $students_arr = [];
 if ($selected_course > 0) {
     $stmt = mysqli_prepare($conn, "
@@ -53,7 +48,6 @@ if ($selected_course > 0) {
     while ($s = mysqli_fetch_assoc($rs)) $students_arr[] = $s;
 }
 
-/* ===== Add grade ===== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_grade'])) {
     if (!csrf_check($_POST['csrf_token'] ?? '')) {
         $error = "Invalid request (CSRF).";
@@ -65,46 +59,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_grade'])) {
         $total      = (float)($_POST['total_marks'] ?? 100);
         $remarks    = sanitize($conn, $_POST['remarks'] ?? '');
 
-        // Ensure course belongs to faculty
-        $stmt = mysqli_prepare($conn, "SELECT id FROM courses WHERE id=? AND faculty_id=? LIMIT 1");
-        mysqli_stmt_bind_param($stmt, "ii", $course_id, $faculty_pk);
-        mysqli_stmt_execute($stmt);
-        $okCourse = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
-
-        if (!$okCourse) {
-            $error = "You cannot add grades for this course.";
+        if (!in_array($exam_type, ['Internal', 'Mid-Term', 'Final', 'Assignment'], true)) {
+            $error = 'Invalid exam type.';
+        } elseif ($student_id <= 0 || $course_id <= 0) {
+            $error = 'Please select a course and student.';
+        } elseif ($total <= 0) {
+            $error = 'Total marks must be greater than 0.';
+        } elseif ($obtained < 0) {
+            $error = 'Marks obtained cannot be negative.';
+        } elseif ($obtained > $total) {
+            $error = 'Marks obtained cannot exceed total marks.';
         } else {
-            // Ensure student is enrolled in this course
-            $stmt = mysqli_prepare($conn, "SELECT id FROM enrollments WHERE student_id=? AND course_id=? LIMIT 1");
-            mysqli_stmt_bind_param($stmt, "ii", $student_id, $course_id);
+            $stmt = mysqli_prepare($conn, "SELECT id FROM courses WHERE id=? AND faculty_id=? LIMIT 1");
+            mysqli_stmt_bind_param($stmt, "ii", $course_id, $faculty_pk);
             mysqli_stmt_execute($stmt);
-            $okEnroll = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+            $okCourse = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 
-            if (!$okEnroll) {
-                $error = "Student is not enrolled in this course.";
+            if (!$okCourse) {
+                $error = "You cannot add grades for this course.";
             } else {
-                $pct = ($total > 0) ? ($obtained / $total) * 100 : 0;
-                $grade = $pct >= 90 ? 'A+' : ($pct >= 80 ? 'A' : ($pct >= 70 ? 'B' : ($pct >= 60 ? 'C' : ($pct >= 50 ? 'D' : 'F'))));
+                $stmt = mysqli_prepare($conn, "SELECT id FROM enrollments WHERE student_id=? AND course_id=? LIMIT 1");
+                mysqli_stmt_bind_param($stmt, "ii", $student_id, $course_id);
+                mysqli_stmt_execute($stmt);
+                $okEnroll = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 
-                try {
-                    $stmt = mysqli_prepare($conn, "
-                        INSERT INTO grades (student_id, course_id, exam_type, marks_obtained, total_marks, grade, remarks)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    ");
-                    mysqli_stmt_bind_param($stmt, "iisddss", $student_id, $course_id, $exam_type, $obtained, $total, $grade, $remarks);
+                if (!$okEnroll) {
+                    $error = "Student is not enrolled in this course.";
+                } else {
+                    $stmt = mysqli_prepare($conn, "SELECT id FROM grades WHERE student_id=? AND course_id=? AND exam_type=? LIMIT 1");
+                    mysqli_stmt_bind_param($stmt, "iis", $student_id, $course_id, $exam_type);
                     mysqli_stmt_execute($stmt);
+                    $duplicate = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 
-                    $success = "Grade saved. Student got <strong>$grade</strong>.";
-                    $selected_course = $course_id;
-                } catch (Throwable $e) {
-                    $error = "Error: " . $e->getMessage();
+                    if ($duplicate) {
+                        $error = 'A grade for this student, course, and exam type already exists.';
+                    } else {
+                        $pct = ($obtained / $total) * 100;
+                        $grade = $pct >= 90 ? 'A+' : ($pct >= 80 ? 'A' : ($pct >= 70 ? 'B' : ($pct >= 60 ? 'C' : ($pct >= 50 ? 'D' : 'F'))));
+
+                        try {
+                            $stmt = mysqli_prepare($conn, "
+                                INSERT INTO grades (student_id, course_id, exam_type, marks_obtained, total_marks, grade, remarks)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                            ");
+                            mysqli_stmt_bind_param($stmt, "iisddss", $student_id, $course_id, $exam_type, $obtained, $total, $grade, $remarks);
+                            mysqli_stmt_execute($stmt);
+
+                            $success = "Grade saved. Student got {$grade}.";
+                            $selected_course = $course_id;
+                        } catch (Throwable $e) {
+                            $error = "Error: " . $e->getMessage();
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-/* ===== Recent grades for this faculty (via courses) ===== */
 $stmt = mysqli_prepare($conn, "
     SELECT g.*, s.name AS student_name, s.student_id AS stu_id, c.course_code, c.course_name
     FROM grades g
@@ -123,7 +135,7 @@ $recent = mysqli_stmt_get_result($stmt);
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
+  <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
   <title>Enter Grades – CollegeMS</title>
   <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -141,8 +153,8 @@ $recent = mysqli_stmt_get_result($stmt);
     </nav>
     <div class="sidebar-footer">
       <div class="user-info">
-        <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'] ?? 'F', 0, 1)) ?></div>
-        <div><div class="user-name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Faculty') ?></div><div class="user-role">Faculty</div></div>
+        <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'F', 0, 1))) ?></div>
+        <div><div class="user-name"><?= e($_SESSION['user_name'] ?? 'Faculty') ?></div><div class="user-role">Faculty</div></div>
       </div>
       <a href="logout.php" class="btn btn-secondary" style="width:100%; font-size:13px;">🚪 Logout</a>
     </div>
@@ -158,10 +170,9 @@ $recent = mysqli_stmt_get_result($stmt);
     </header>
 
     <div class="page-content">
-      <?php if ($success): ?><div class="alert alert-success"><?= $success ?></div><?php endif; ?>
-      <?php if ($error): ?><div class="alert alert-danger"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+      <?php if ($success): ?><div class="alert alert-success"><?= e($success) ?></div><?php endif; ?>
+      <?php if ($error): ?><div class="alert alert-danger"><?= e($error) ?></div><?php endif; ?>
 
-      <!-- COURSE FILTER -->
       <div class="card" style="margin-bottom:20px;">
         <div class="card-header"><h3>🔍 Select Course</h3></div>
         <div class="card-body">
@@ -172,7 +183,7 @@ $recent = mysqli_stmt_get_result($stmt);
                 <option value="">Select Course</option>
                 <?php foreach ($courses_arr as $c): ?>
                   <option value="<?= (int)$c['id'] ?>" <?= $selected_course === (int)$c['id'] ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($c['course_code'].' - '.$c['course_name']) ?>
+                    <?= e($c['course_code'].' - '.$c['course_name']) ?>
                   </option>
                 <?php endforeach; ?>
               </select>
@@ -181,12 +192,11 @@ $recent = mysqli_stmt_get_result($stmt);
         </div>
       </div>
 
-      <!-- ADD GRADE -->
       <div class="card" style="margin-bottom:25px;">
         <div class="card-header"><h3>➕ Add Grade</h3></div>
         <div class="card-body">
           <form method="POST" id="addForm" onsubmit="return validateForm('addForm')">
-            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
+            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
             <input type="hidden" name="course_id" value="<?= (int)$selected_course ?>">
 
             <div class="form-grid">
@@ -202,7 +212,7 @@ $recent = mysqli_stmt_get_result($stmt);
                 <select name="student_id" required <?= $selected_course ? '' : 'disabled' ?>>
                   <option value="">Select Student</option>
                   <?php foreach ($students_arr as $s): ?>
-                    <option value="<?= (int)$s['id'] ?>"><?= htmlspecialchars($s['student_id'].' - '.$s['name']) ?></option>
+                    <option value="<?= (int)$s['id'] ?>"><?= e($s['student_id'].' - '.$s['name']) ?></option>
                   <?php endforeach; ?>
                 </select>
               </div>
@@ -245,7 +255,6 @@ $recent = mysqli_stmt_get_result($stmt);
         </div>
       </div>
 
-      <!-- RECENT GRADES -->
       <div class="card">
         <div class="card-header"><h3>📋 Recent Grades (Your Courses)</h3></div>
         <div class="table-responsive">
@@ -257,13 +266,13 @@ $recent = mysqli_stmt_get_result($stmt);
               $chip = $pct>=70 ? 'chip-success' : ($pct>=50 ? 'chip-warning' : 'chip-danger');
             ?>
               <tr>
-                <td><strong><?= htmlspecialchars($g['student_name']) ?></strong><br><small style="color:var(--text-muted)"><?= htmlspecialchars($g['stu_id']) ?></small></td>
-                <td><span class="chip chip-purple"><?= htmlspecialchars($g['course_code']) ?></span><br><small><?= htmlspecialchars($g['course_name']) ?></small></td>
-                <td><span class="chip chip-info"><?= htmlspecialchars($g['exam_type']) ?></span></td>
-                <td><?= htmlspecialchars($g['marks_obtained']) ?> / <?= htmlspecialchars($g['total_marks']) ?></td>
+                <td><strong><?= e($g['student_name']) ?></strong><br><small style="color:var(--text-muted)"><?= e($g['stu_id']) ?></small></td>
+                <td><span class="chip chip-purple"><?= e($g['course_code']) ?></span><br><small><?= e($g['course_name']) ?></small></td>
+                <td><span class="chip chip-info"><?= e($g['exam_type']) ?></span></td>
+                <td><?= e($g['marks_obtained']) ?> / <?= e($g['total_marks']) ?></td>
                 <td><?= (int)$pct ?>%</td>
-                <td><span class="chip <?= $chip ?>" style="font-weight:800;"><?= htmlspecialchars($g['grade']) ?></span></td>
-                <td style="color:var(--text-muted);"><?= htmlspecialchars($g['remarks'] ?: '—') ?></td>
+                <td><span class="chip <?= $chip ?>" style="font-weight:800;"><?= e($g['grade']) ?></span></td>
+                <td style="color:var(--text-muted);"><?= e($g['remarks'] ?: '—') ?></td>
               </tr>
             <?php } ?>
             <?php if(!$has): ?>

@@ -7,7 +7,6 @@ $success = $error = '';
 
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 
-/* ===== Faculty record ===== */
 $stmt = mysqli_prepare($conn, "SELECT id FROM faculty WHERE user_id=? LIMIT 1");
 mysqli_stmt_bind_param($stmt, "i", $user_id);
 mysqli_stmt_execute($stmt);
@@ -15,14 +14,12 @@ $faculty = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 if (!$faculty) { header("Location: ../login.php"); exit(); }
 $faculty_pk = (int)$faculty['id'];
 
-/* ===== Helper: validate YYYY-MM-DD ===== */
 function valid_date_ymd(string $d): bool {
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $d)) return false;
-    [$y,$m,$day] = array_map('intval', explode('-', $d));
+    [$y, $m, $day] = array_map('intval', explode('-', $d));
     return checkdate($m, $day, $y);
 }
 
-/* ===== Courses dropdown (only my courses) ===== */
 $stmt = mysqli_prepare($conn, "SELECT id, course_code, course_name FROM courses WHERE faculty_id=? ORDER BY course_code");
 mysqli_stmt_bind_param($stmt, "i", $faculty_pk);
 mysqli_stmt_execute($stmt);
@@ -31,12 +28,10 @@ $crs = mysqli_stmt_get_result($stmt);
 $courses_arr = [];
 while ($c = mysqli_fetch_assoc($crs)) $courses_arr[] = $c;
 
-/* ===== Selected course/date ===== */
 $selected_course = (int)($_GET['course_id'] ?? 0);
 $selected_date   = (string)($_GET['date'] ?? date('Y-m-d'));
 if (!valid_date_ymd($selected_date)) $selected_date = date('Y-m-d');
 
-/* ===== Mark attendance ===== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_attendance'])) {
     if (!csrf_check($_POST['csrf_token'] ?? '')) {
         $error = "Invalid request (CSRF).";
@@ -51,7 +46,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_attendance'])) {
         } elseif (!valid_date_ymd($date)) {
             $error = "Invalid date.";
         } else {
-            // Ensure course belongs to this faculty
             $stmt = mysqli_prepare($conn, "SELECT id FROM courses WHERE id=? AND faculty_id=? LIMIT 1");
             mysqli_stmt_bind_param($stmt, "ii", $course_id, $faculty_pk);
             mysqli_stmt_execute($stmt);
@@ -61,30 +55,45 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_attendance'])) {
                 $error = "You cannot mark attendance for this course.";
             } else {
                 try {
+                    mysqli_begin_transaction($conn);
                     $marked_by = (int)($_SESSION['user_id'] ?? 0);
 
-                    // Prepare once
                     $stmtIns = mysqli_prepare($conn, "
                         INSERT INTO attendance (student_id, course_id, date, status, marked_by)
                         VALUES (?, ?, ?, ?, ?)
                         ON DUPLICATE KEY UPDATE status=VALUES(status), marked_by=VALUES(marked_by)
                     ");
 
+                    $stmtEnroll = mysqli_prepare($conn, "
+                        SELECT id FROM enrollments WHERE student_id=? AND course_id=? LIMIT 1
+                    ");
+
                     $count = 0;
                     foreach ($student_ids as $sid) {
                         $sid = (int)$sid;
+                        if ($sid <= 0) continue;
+
+                        mysqli_stmt_bind_param($stmtEnroll, "ii", $sid, $course_id);
+                        mysqli_stmt_execute($stmtEnroll);
+                        $is_enrolled = mysqli_fetch_assoc(mysqli_stmt_get_result($stmtEnroll));
+                        if (!$is_enrolled) continue;
+
                         $status = (string)($statuses[$sid] ?? 'Absent');
-                        if (!in_array($status, ['Present','Absent','Late'], true)) $status = 'Absent';
+                        if (!in_array($status, ['Present','Absent','Late'], true)) {
+                            $status = 'Absent';
+                        }
 
                         mysqli_stmt_bind_param($stmtIns, "iissi", $sid, $course_id, $date, $status, $marked_by);
                         mysqli_stmt_execute($stmtIns);
                         $count++;
                     }
 
-                    $success = "Attendance saved for $count students on $date.";
+                    mysqli_commit($conn);
+                    $success = "Attendance saved for {$count} students on {$date}.";
                     $selected_course = $course_id;
                     $selected_date = $date;
                 } catch (Throwable $e) {
+                    mysqli_rollback($conn);
                     $error = "Error: " . $e->getMessage();
                 }
             }
@@ -92,18 +101,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['mark_attendance'])) {
     }
 }
 
-/* ===== Students for selected course ===== */
 $students_list = [];
 
 if ($selected_course > 0) {
-    // Ensure selected course belongs to this faculty
     $stmt = mysqli_prepare($conn, "SELECT id FROM courses WHERE id=? AND faculty_id=? LIMIT 1");
     mysqli_stmt_bind_param($stmt, "ii", $selected_course, $faculty_pk);
     mysqli_stmt_execute($stmt);
     $ok = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
 
     if ($ok) {
-        // Students via enrollments
         $stmt = mysqli_prepare($conn, "
             SELECT s.id, s.student_id, s.name,
                    COALESCE(a.status, 'Not Marked') AS att_status
@@ -128,7 +134,7 @@ if ($selected_course > 0) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
+  <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
   <title>Mark Attendance – CollegeMS</title>
   <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -146,8 +152,8 @@ if ($selected_course > 0) {
     </nav>
     <div class="sidebar-footer">
       <div class="user-info">
-        <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'] ?? 'F', 0, 1)) ?></div>
-        <div><div class="user-name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Faculty') ?></div><div class="user-role">Faculty</div></div>
+        <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'F', 0, 1))) ?></div>
+        <div><div class="user-name"><?= e($_SESSION['user_name'] ?? 'Faculty') ?></div><div class="user-role">Faculty</div></div>
       </div>
       <a href="logout.php" class="btn btn-secondary" style="width:100%; font-size:13px;">🚪 Logout</a>
     </div>
@@ -163,10 +169,9 @@ if ($selected_course > 0) {
     </header>
 
     <div class="page-content">
-      <?php if ($success): ?><div class="alert alert-success"><?= $success ?></div><?php endif; ?>
-      <?php if ($error):   ?><div class="alert alert-danger"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+      <?php if ($success): ?><div class="alert alert-success"><?= e($success) ?></div><?php endif; ?>
+      <?php if ($error): ?><div class="alert alert-danger"><?= e($error) ?></div><?php endif; ?>
 
-      <!-- FILTER -->
       <div class="card" style="margin-bottom:25px;">
         <div class="card-header"><h3>🔍 Select Course & Date</h3></div>
         <div class="card-body">
@@ -177,20 +182,19 @@ if ($selected_course > 0) {
                 <option value="">Select Course</option>
                 <?php foreach ($courses_arr as $c): ?>
                 <option value="<?= (int)$c['id'] ?>" <?= $selected_course === (int)$c['id'] ? 'selected' : '' ?>>
-                  <?= htmlspecialchars($c['course_code'].' - '.$c['course_name']) ?>
+                  <?= e($c['course_code'].' - '.$c['course_name']) ?>
                 </option>
                 <?php endforeach; ?>
               </select>
             </div>
             <div class="form-group" style="margin:0; flex:1; min-width:160px;">
               <label>Date</label>
-              <input type="date" name="date" value="<?= htmlspecialchars($selected_date) ?>" onchange="this.form.submit()">
+              <input type="date" name="date" value="<?= e($selected_date) ?>" onchange="this.form.submit()">
             </div>
           </form>
         </div>
       </div>
 
-      <!-- MARK -->
       <?php if ($selected_course && $students_list): ?>
       <div class="card">
         <div class="card-header">
@@ -202,9 +206,9 @@ if ($selected_course > 0) {
         </div>
 
         <form method="POST">
-          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
+          <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
           <input type="hidden" name="course_id" value="<?= (int)$selected_course ?>">
-          <input type="hidden" name="date" value="<?= htmlspecialchars($selected_date) ?>">
+          <input type="hidden" name="date" value="<?= e($selected_date) ?>">
 
           <div class="table-responsive">
             <table>
@@ -213,8 +217,8 @@ if ($selected_course > 0) {
               <?php $i=1; foreach ($students_list as $s): ?>
                 <tr>
                   <td><?= $i++ ?></td>
-                  <td><span class="chip chip-purple"><?= htmlspecialchars($s['student_id']) ?></span></td>
-                  <td><?= htmlspecialchars($s['name']) ?></td>
+                  <td><span class="chip chip-purple"><?= e($s['student_id']) ?></span></td>
+                  <td><?= e($s['name']) ?></td>
                   <td>
                     <input type="hidden" name="student_id[]" value="<?= (int)$s['id'] ?>">
                     <select name="status[<?= (int)$s['id'] ?>]" class="att-select"

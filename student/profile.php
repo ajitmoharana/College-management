@@ -40,10 +40,10 @@ if (!$student) { header("Location: ../login.php"); exit(); }
     </nav>
     <div class="sidebar-footer">
       <div class="user-info">
-        <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'] ?? 'S', 0, 1)) ?></div>
+        <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'S', 0, 1))) ?></div>
         <div>
-          <div class="user-name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Student') ?></div>
-          <div class="user-role"><?= htmlspecialchars($student['student_id']) ?></div>
+          <div class="user-name"><?= e($_SESSION['user_name'] ?? 'Student') ?></div>
+          <div class="user-role"><?= e($student['student_id']) ?></div>
         </div>
       </div>
       <a href="logout.php" class="btn btn-secondary" style="width:100%; font-size:13px;">🚪 Logout</a>
@@ -64,15 +64,15 @@ if (!$student) { header("Location: ../login.php"); exit(); }
         <div class="card-header"><h3>👤 Student Details</h3></div>
         <div class="card-body">
           <div class="form-grid">
-            <div class="form-group"><label>Student ID</label><input value="<?= htmlspecialchars($student['student_id']) ?>" readonly></div>
-            <div class="form-group"><label>Name</label><input value="<?= htmlspecialchars($student['name']) ?>" readonly></div>
-            <div class="form-group"><label>Email</label><input value="<?= htmlspecialchars($student['email']) ?>" readonly></div>
-            <div class="form-group"><label>Phone</label><input value="<?= htmlspecialchars($student['phone'] ?? '') ?>" readonly></div>
-            <div class="form-group"><label>Department</label><input value="<?= htmlspecialchars($student['dept_name'] ?? '') ?>" readonly></div>
+            <div class="form-group"><label>Student ID</label><input value="<?= e($student['student_id']) ?>" readonly></div>
+            <div class="form-group"><label>Name</label><input value="<?= e($student['name']) ?>" readonly></div>
+            <div class="form-group"><label>Email</label><input value="<?= e($student['email']) ?>" readonly></div>
+            <div class="form-group"><label>Phone</label><input value="<?= e($student['phone'] ?? '') ?>" readonly></div>
+            <div class="form-group"><label>Department</label><input value="<?= e($student['dept_name'] ?? '') ?>" readonly></div>
             <div class="form-group"><label>Semester</label><input value="<?= (int)$student['semester'] ?>" readonly></div>
-            <div class="form-group"><label>Status</label><input value="<?= htmlspecialchars($student['status']) ?>" readonly></div>
-            <div class="form-group"><label>Admission Year</label><input value="<?= htmlspecialchars($student['admission_year']) ?>" readonly></div>
-            <div class="form-group full-width"><label>Address</label><textarea rows="3" readonly><?= htmlspecialchars($student['address'] ?? '') ?></textarea></div>
+            <div class="form-group"><label>Status</label><input value="<?= e($student['status']) ?>" readonly></div>
+            <div class="form-group"><label>Admission Year</label><input value="<?= e($student['admission_year']) ?>" readonly></div>
+            <div class="form-group full-width"><label>Address</label><textarea rows="3" readonly><?= e($student['address'] ?? '') ?></textarea></div>
           </div>
         </div>
       </div>

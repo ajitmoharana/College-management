@@ -1,4 +1,3 @@
-// admin/notices.php ✅ UPDATED (CSRF delete + prepared insert + safer listing)
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth.php';
@@ -7,44 +6,49 @@ requireLogin('admin');
 $success = $error = '';
 $action  = $_GET['action'] ?? 'list';
 
-/* ===== ADD NOTICE ===== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_notice'])) {
     if (!csrf_check($_POST['csrf_token'] ?? '')) {
-        $error = "Invalid request (CSRF).";
+        $error = 'Invalid request (CSRF).';
     } else {
-        $title   = sanitize($conn, $_POST['title']);
-        $content = sanitize($conn, $_POST['content']);
-        $target  = sanitize($conn, $_POST['target_role']);
+        $title     = sanitize($conn, $_POST['title'] ?? '');
+        $content   = sanitize($conn, $_POST['content'] ?? '');
+        $target    = sanitize($conn, $_POST['target_role'] ?? 'all');
         $posted_by = (int)($_SESSION['user_id'] ?? 0);
 
-        try {
-            $stmt = mysqli_prepare($conn, "INSERT INTO notices (title, content, posted_by, target_role) VALUES (?, ?, ?, ?)");
-            mysqli_stmt_bind_param($stmt, "ssis", $title, $content, $posted_by, $target);
-            mysqli_stmt_execute($stmt);
-            $success = "Notice posted!";
-            $action = 'list';
-        } catch (Throwable $e) {
-            $error = "Error: " . $e->getMessage();
+        if ($title === '' || $content === '') {
+            $error = 'Title and content are required.';
+        } elseif (!in_array($target, ['all', 'student', 'faculty'], true)) {
+            $error = 'Invalid target audience.';
+        } else {
+            try {
+                $stmt = mysqli_prepare($conn, 'INSERT INTO notices (title, content, posted_by, target_role) VALUES (?, ?, ?, ?)');
+                mysqli_stmt_bind_param($stmt, 'ssis', $title, $content, $posted_by, $target);
+                mysqli_stmt_execute($stmt);
+                $success = 'Notice posted.';
+                $action = 'list';
+            } catch (Throwable $e) {
+                $error = 'Error: ' . $e->getMessage();
+            }
         }
     }
 }
 
-/* ===== DELETE NOTICE (POST + CSRF) ===== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
     if (!csrf_check($_POST['csrf_token'] ?? '')) {
-        $error = "Invalid request (CSRF).";
+        $error = 'Invalid request (CSRF).';
     } else {
         $del_id = (int)$_POST['delete_id'];
         try {
-            mysqli_query($conn, "DELETE FROM notices WHERE id=$del_id");
-            $success = "Notice deleted.";
+            $stmt = mysqli_prepare($conn, 'DELETE FROM notices WHERE id=?');
+            mysqli_stmt_bind_param($stmt, 'i', $del_id);
+            mysqli_stmt_execute($stmt);
+            $success = 'Notice deleted.';
         } catch (Throwable $e) {
-            $error = "Delete failed: " . $e->getMessage();
+            $error = 'Delete failed: ' . $e->getMessage();
         }
     }
 }
 
-/* ===== LIST ===== */
 $notices = mysqli_query($conn, "
     SELECT n.*, u.name as author
     FROM notices n
@@ -56,7 +60,7 @@ $notices = mysqli_query($conn, "
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title>Notices – CollegeMS</title>
     <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -75,8 +79,8 @@ $notices = mysqli_query($conn, "
         </header>
 
         <div class="page-content">
-            <?php if ($success): ?><div class="alert alert-success"><?= $success ?></div><?php endif; ?>
-            <?php if ($error):   ?><div class="alert alert-danger"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+            <?php if ($success): ?><div class="alert alert-success"><?= e($success) ?></div><?php endif; ?>
+            <?php if ($error): ?><div class="alert alert-danger"><?= e($error) ?></div><?php endif; ?>
 
             <?php if ($action === 'add'): ?>
             <div class="card">
@@ -86,7 +90,7 @@ $notices = mysqli_query($conn, "
                 </div>
                 <div class="card-body">
                     <form method="POST">
-                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_token()) ?>">
+                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
 
                         <div class="form-group">
                             <label>Title *</label>
@@ -119,14 +123,14 @@ $notices = mysqli_query($conn, "
                     <div class="card-body" style="padding:20px 25px;">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:15px;">
                             <div>
-                                <h3 style="font-size:16px; margin-bottom:8px;"><?= htmlspecialchars($n['title']) ?></h3>
-                                <p style="color:var(--text-muted); font-size:14px; line-height:1.6;"><?= nl2br(htmlspecialchars($n['content'])) ?></p>
+                                <h3 style="font-size:16px; margin-bottom:8px;"><?= e($n['title']) ?></h3>
+                                <p style="color:var(--text-muted); font-size:14px; line-height:1.6;"><?= nl2br(e($n['content'])) ?></p>
                                 <div style="margin-top:12px; display:flex; gap:10px; align-items:center;">
                                     <span class="chip <?= $n['target_role'] === 'all' ? 'chip-info' : ($n['target_role'] === 'student' ? 'chip-success' : 'chip-warning') ?>">
-                                        <?= htmlspecialchars(ucfirst($n['target_role'])) ?>
+                                        <?= e(ucfirst($n['target_role'])) ?>
                                     </span>
                                     <span style="font-size:12px; color:var(--text-muted);">
-                                        Posted by <?= htmlspecialchars($n['author'] ?? '—') ?> · <?= date('d M Y, g:i A', strtotime($n['created_at'])) ?>
+                                        Posted by <?= e($n['author'] ?? '—') ?> · <?= date('d M Y, g:i A', strtotime($n['created_at'])) ?>
                                     </span>
                                 </div>
                             </div>

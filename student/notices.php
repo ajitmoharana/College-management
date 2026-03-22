@@ -3,7 +3,6 @@ require_once '../includes/db.php';
 require_once '../includes/auth.php';
 requireLogin('student');
 
-// Fetch notices for students + all
 $stmt = mysqli_prepare($conn, "
   SELECT n.title, n.content, n.created_at, u.name as author
   FROM notices n
@@ -42,9 +41,9 @@ $notices = mysqli_stmt_get_result($stmt);
 
     <div class="sidebar-footer">
       <div class="user-info">
-        <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'] ?? 'S', 0, 1)) ?></div>
+        <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'S', 0, 1))) ?></div>
         <div>
-          <div class="user-name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Student') ?></div>
+          <div class="user-name"><?= e($_SESSION['user_name'] ?? 'Student') ?></div>
           <div class="user-role">Student</div>
         </div>
       </div>
@@ -71,12 +70,12 @@ $notices = mysqli_stmt_get_result($stmt);
         <?php $has=false; while($n=mysqli_fetch_assoc($notices)) { $has=true; ?>
           <div class="card">
             <div class="card-body" style="padding:20px 25px;">
-              <h3 style="font-size:16px; margin-bottom:8px;"><?= htmlspecialchars($n['title']) ?></h3>
+              <h3 style="font-size:16px; margin-bottom:8px;"><?= e($n['title']) ?></h3>
               <p style="color:var(--text-muted); font-size:14px; line-height:1.6;">
-                <?= nl2br(htmlspecialchars($n['content'])) ?>
+                <?= nl2br(e($n['content'])) ?>
               </p>
               <div style="margin-top:10px; font-size:12px; color:var(--text-muted);">
-                Posted by <?= htmlspecialchars($n['author'] ?? '—') ?> · <?= date('d M Y, g:i A', strtotime($n['created_at'])) ?>
+                Posted by <?= e($n['author'] ?? '—') ?> · <?= date('d M Y, g:i A', strtotime($n['created_at'])) ?>
               </div>
             </div>
           </div>

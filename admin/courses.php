@@ -1,4 +1,3 @@
-// admin/courses.php ✅ UPDATED (CSRF delete + faculty_id NULL handling + safer ordering)
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth.php';
@@ -7,60 +6,91 @@ requireLogin('admin');
 $success = $error = '';
 $action  = $_GET['action'] ?? 'list';
 
-/* ===== HANDLE ADD ===== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_course'])) {
-    $code    = sanitize($conn, $_POST['course_code']);
-    $name    = sanitize($conn, $_POST['course_name']);
-    $dept_id = (int)($_POST['department_id'] ?? 0);
-
-    // faculty is optional -> store NULL if empty
-    $fac_raw = trim((string)($_POST['faculty_id'] ?? ''));
-    $fac_id  = ($fac_raw === '') ? null : (int)$fac_raw;
-
-    $sem     = (int)($_POST['semester'] ?? 1);
-    $credits = (int)($_POST['credits'] ?? 3);
-
-    // Build statement depending on whether faculty_id is NULL
-    if ($fac_id === null) {
-        $stmt = mysqli_prepare($conn, "
-            INSERT INTO courses (course_code, course_name, department_id, faculty_id, semester, credits)
-            VALUES (?, ?, ?, NULL, ?, ?)
-        ");
-        mysqli_stmt_bind_param($stmt, "ssiii", $code, $name, $dept_id, $sem, $credits);
-    } else {
-        $stmt = mysqli_prepare($conn, "
-            INSERT INTO courses (course_code, course_name, department_id, faculty_id, semester, credits)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ");
-        mysqli_stmt_bind_param($stmt, "ssiiii", $code, $name, $dept_id, $fac_id, $sem, $credits);
-    }
-
-    try {
-        mysqli_stmt_execute($stmt);
-        $success = "Course <strong>$name</strong> added!";
-        $action = 'list';
-    } catch (Throwable $e) {
-        $error = "Error: " . $e->getMessage();
-    }
-}
-
-/* ===== HANDLE DELETE (POST + CSRF) ===== */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
     if (!csrf_check($_POST['csrf_token'] ?? '')) {
-        $error = "Invalid request (CSRF).";
+        $error = 'Invalid request (CSRF).';
     } else {
-        $del_id = (int)$_POST['delete_id'];
-        try {
-            mysqli_query($conn, "DELETE FROM courses WHERE id=$del_id");
-            $success = "Course deleted.";
-        } catch (Throwable $e) {
-            $error = "Delete failed: " . $e->getMessage();
+        $code    = sanitize($conn, $_POST['course_code'] ?? '');
+        $name    = sanitize($conn, $_POST['course_name'] ?? '');
+        $dept_id = (int)($_POST['department_id'] ?? 0);
+
+        $fac_raw = trim((string)($_POST['faculty_id'] ?? ''));
+        $fac_id  = ($fac_raw === '') ? null : (int)$fac_raw;
+
+        $sem     = (int)($_POST['semester'] ?? 1);
+        $credits = (int)($_POST['credits'] ?? 3);
+
+        if ($code === '' || $name === '') {
+            $error = 'Course code and course name are required.';
+        } elseif ($dept_id <= 0) {
+            $error = 'Please select a department.';
+        } elseif ($sem < 1 || $sem > 8) {
+            $error = 'Semester must be between 1 and 8.';
+        } elseif ($credits < 1 || $credits > 10) {
+            $error = 'Credits must be between 1 and 10.';
+        } else {
+            $stmt = mysqli_prepare($conn, 'SELECT id FROM departments WHERE id=? LIMIT 1');
+            mysqli_stmt_bind_param($stmt, 'i', $dept_id);
+            mysqli_stmt_execute($stmt);
+            $dept_ok = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+
+            if (!$dept_ok) {
+                $error = 'Selected department does not exist.';
+            } elseif ($fac_id !== null) {
+                $stmt = mysqli_prepare($conn, 'SELECT id FROM faculty WHERE id=? LIMIT 1');
+                mysqli_stmt_bind_param($stmt, 'i', $fac_id);
+                mysqli_stmt_execute($stmt);
+                $fac_ok = mysqli_fetch_assoc(mysqli_stmt_get_result($stmt));
+
+                if (!$fac_ok) {
+                    $error = 'Selected faculty does not exist.';
+                }
+            }
+
+            if ($error === '') {
+                try {
+                    if ($fac_id === null) {
+                        $stmt = mysqli_prepare($conn, "
+                            INSERT INTO courses (course_code, course_name, department_id, faculty_id, semester, credits)
+                            VALUES (?, ?, ?, NULL, ?, ?)
+                        ");
+                        mysqli_stmt_bind_param($stmt, 'ssiii', $code, $name, $dept_id, $sem, $credits);
+                    } else {
+                        $stmt = mysqli_prepare($conn, "
+                            INSERT INTO courses (course_code, course_name, department_id, faculty_id, semester, credits)
+                            VALUES (?, ?, ?, ?, ?, ?)
+                        ");
+                        mysqli_stmt_bind_param($stmt, 'ssiiii', $code, $name, $dept_id, $fac_id, $sem, $credits);
+                    }
+
+                    mysqli_stmt_execute($stmt);
+                    $success = "Course {$name} added.";
+                    $action = 'list';
+                } catch (Throwable $e) {
+                    $error = 'Error: ' . $e->getMessage();
+                }
+            }
         }
     }
 }
 
-/* ===== Dropdown data ===== */
-$departments = mysqli_query($conn, "SELECT id, name FROM departments ORDER BY name");
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
+    if (!csrf_check($_POST['csrf_token'] ?? '')) {
+        $error = 'Invalid request (CSRF).';
+    } else {
+        $del_id = (int)$_POST['delete_id'];
+        try {
+            $stmt = mysqli_prepare($conn, 'DELETE FROM courses WHERE id=?');
+            mysqli_stmt_bind_param($stmt, 'i', $del_id);
+            mysqli_stmt_execute($stmt);
+            $success = 'Course deleted.';
+        } catch (Throwable $e) {
+            $error = 'Delete failed: ' . $e->getMessage();
+        }
+    }
+}
+
+$departments = mysqli_query($conn, 'SELECT id, name FROM departments ORDER BY name');
 $depts_arr = [];
 while ($d = mysqli_fetch_assoc($departments)) $depts_arr[] = $d;
 
@@ -68,7 +98,6 @@ $faculty_list = mysqli_query($conn, "SELECT id, name FROM faculty WHERE status='
 $fac_arr = [];
 while ($f = mysqli_fetch_assoc($faculty_list)) $fac_arr[] = $f;
 
-/* ===== Courses list ===== */
 $courses = mysqli_query($conn, "
     SELECT c.*, d.name as dept_name, f.name as faculty_name
     FROM courses c
@@ -81,7 +110,7 @@ $courses = mysqli_query($conn, "
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title>Courses – CollegeMS</title>
     <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -99,8 +128,8 @@ $courses = mysqli_query($conn, "
             </div>
         </header>
         <div class="page-content">
-            <?php if ($success): ?><div class="alert alert-success"><?= $success ?></div><?php endif; ?>
-            <?php if ($error):   ?><div class="alert alert-danger"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+            <?php if ($success): ?><div class="alert alert-success"><?= e($success) ?></div><?php endif; ?>
+            <?php if ($error): ?><div class="alert alert-danger"><?= e($error) ?></div><?php endif; ?>
 
             <?php if ($action === 'add'): ?>
             <div class="card">
@@ -110,6 +139,7 @@ $courses = mysqli_query($conn, "
                 </div>
                 <div class="card-body">
                     <form method="POST" id="addForm" onsubmit="return validateForm('addForm')">
+                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                         <div class="form-grid">
                             <div class="form-group">
                                 <label>Course Code *</label>
@@ -124,7 +154,7 @@ $courses = mysqli_query($conn, "
                                 <select name="department_id" required>
                                     <option value="">Select</option>
                                     <?php foreach ($depts_arr as $d): ?>
-                                    <option value="<?= (int)$d['id'] ?>"><?= htmlspecialchars($d['name']) ?></option>
+                                    <option value="<?= (int)$d['id'] ?>"><?= e($d['name']) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -133,7 +163,7 @@ $courses = mysqli_query($conn, "
                                 <select name="faculty_id">
                                     <option value="">Unassigned</option>
                                     <?php foreach ($fac_arr as $f): ?>
-                                    <option value="<?= (int)$f['id'] ?>"><?= htmlspecialchars($f['name']) ?></option>
+                                    <option value="<?= (int)$f['id'] ?>"><?= e($f['name']) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -179,10 +209,10 @@ $courses = mysqli_query($conn, "
                             <?php $i=1; while ($c = mysqli_fetch_assoc($courses)): ?>
                             <tr>
                                 <td><?= $i++ ?></td>
-                                <td><span class="chip chip-purple"><?= htmlspecialchars($c['course_code']) ?></span></td>
-                                <td><strong><?= htmlspecialchars($c['course_name']) ?></strong></td>
-                                <td><?= htmlspecialchars($c['dept_name'] ?? 'N/A') ?></td>
-                                <td><?= htmlspecialchars($c['faculty_name'] ?? 'Unassigned') ?></td>
+                                <td><span class="chip chip-purple"><?= e($c['course_code']) ?></span></td>
+                                <td><strong><?= e($c['course_name']) ?></strong></td>
+                                <td><?= e($c['dept_name'] ?? 'N/A') ?></td>
+                                <td><?= e($c['faculty_name'] ?? 'Unassigned') ?></td>
                                 <td><?= (int)$c['semester'] ?></td>
                                 <td><span class="chip chip-info"><?= (int)$c['credits'] ?> cr</span></td>
                                 <td>

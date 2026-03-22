@@ -1,4 +1,3 @@
-// admin/dashboard.php ✅ UPDATED (prepared queries + safer counts)
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth.php';

@@ -1,4 +1,3 @@
-// faculty/dashboard.php ✅ UPDATED (prepared queries + safer ints)
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth.php';
@@ -6,7 +5,6 @@ requireLogin('faculty');
 
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 
-/* ===== Load faculty record (prepared) ===== */
 $stmt = mysqli_prepare($conn, "
     SELECT f.*, d.name as dept_name
     FROM faculty f
@@ -22,7 +20,6 @@ if (!$faculty) { header("Location: ../login.php"); exit(); }
 
 $faculty_pk = (int)$faculty['id'];
 
-/* ===== My courses + enrolled count (prepared) ===== */
 $stmt = mysqli_prepare($conn, "
     SELECT c.*,
            COUNT(e.id) as enrolled_students
@@ -42,7 +39,6 @@ while ($c = mysqli_fetch_assoc($my_courses)) $courses_arr[] = $c;
 $total_students = array_sum(array_map(fn($x) => (int)$x['enrolled_students'], $courses_arr));
 $total_courses  = count($courses_arr);
 
-/* ===== Notices (prepared) ===== */
 $stmt = mysqli_prepare($conn, "
     SELECT n.title, n.content, n.created_at
     FROM notices n
@@ -78,10 +74,10 @@ $notices = mysqli_stmt_get_result($stmt);
         </nav>
         <div class="sidebar-footer">
             <div class="user-info">
-                <div class="user-avatar"><?= strtoupper(substr($_SESSION['user_name'], 0, 1)) ?></div>
+                <div class="user-avatar"><?= e(strtoupper(substr($_SESSION['user_name'] ?? 'F', 0, 1))) ?></div>
                 <div>
-                    <div class="user-name"><?= htmlspecialchars($_SESSION['user_name']) ?></div>
-                    <div class="user-role"><?= htmlspecialchars($faculty['designation'] ?? 'Faculty') ?></div>
+                    <div class="user-name"><?= e($_SESSION['user_name'] ?? 'Faculty') ?></div>
+                    <div class="user-role"><?= e($faculty['designation'] ?? 'Faculty') ?></div>
                 </div>
             </div>
             <a href="logout.php" class="btn btn-secondary" style="width:100%; font-size:13px;">🚪 Logout</a>
@@ -94,7 +90,7 @@ $notices = mysqli_stmt_get_result($stmt);
                 <button class="menu-toggle" onclick="toggleSidebar()">☰</button>
                 <div class="topbar-title">
                     <h1>Faculty Dashboard</h1>
-                    <p><?= htmlspecialchars($faculty['dept_name'] ?? '') ?> · <?= htmlspecialchars($faculty['designation'] ?? '') ?></p>
+                    <p><?= e($faculty['dept_name'] ?? '') ?> · <?= e($faculty['designation'] ?? '') ?></p>
                 </div>
             </div>
             <div class="topbar-right">
@@ -121,13 +117,12 @@ $notices = mysqli_stmt_get_result($stmt);
                 </div>
                 <div class="stat-card" style="--stat-color:#a855f7">
                     <div class="stat-icon">🏛️</div>
-                    <div class="stat-value"><?= htmlspecialchars(substr($faculty['dept_name'] ?? 'N/A', 0, 2)) ?></div>
+                    <div class="stat-value"><?= e(substr($faculty['dept_name'] ?? 'N/A', 0, 2)) ?></div>
                     <div class="stat-label">Department</div>
                 </div>
             </div>
 
             <div style="display:grid; grid-template-columns:2fr 1fr; gap:25px;">
-                <!-- MY COURSES -->
                 <div class="card">
                     <div class="card-header"><h3>📚 My Courses</h3></div>
                     <div class="table-responsive">
@@ -138,8 +133,8 @@ $notices = mysqli_stmt_get_result($stmt);
                             <tbody>
                                 <?php foreach ($courses_arr as $c): ?>
                                 <tr>
-                                    <td><span class="chip chip-purple"><?= htmlspecialchars($c['course_code']) ?></span></td>
-                                    <td><?= htmlspecialchars($c['course_name']) ?></td>
+                                    <td><span class="chip chip-purple"><?= e($c['course_code']) ?></span></td>
+                                    <td><?= e($c['course_name']) ?></td>
                                     <td><?= (int)$c['semester'] ?></td>
                                     <td><span class="chip chip-info"><?= (int)$c['credits'] ?> cr</span></td>
                                     <td><span class="chip chip-success"><?= (int)$c['enrolled_students'] ?></span></td>
@@ -153,24 +148,22 @@ $notices = mysqli_stmt_get_result($stmt);
                     </div>
                 </div>
 
-                <!-- NOTICES -->
                 <div class="card">
                     <div class="card-header"><h3>📢 Notices</h3></div>
                     <div class="card-body" style="padding:15px;">
-                        <?php while ($n = mysqli_fetch_assoc($notices)): ?>
+                        <?php $hasNotices = false; while ($n = mysqli_fetch_assoc($notices)): $hasNotices = true; ?>
                         <div style="padding:12px; border-bottom:1px solid var(--border);">
-                            <div style="font-size:14px; font-weight:600; margin-bottom:4px;"><?= htmlspecialchars($n['title']) ?></div>
+                            <div style="font-size:14px; font-weight:600; margin-bottom:4px;"><?= e($n['title']) ?></div>
                             <div style="font-size:12px; color:var(--text-muted)"><?= date('d M Y', strtotime($n['created_at'])) ?></div>
                         </div>
                         <?php endwhile; ?>
-                        <?php if (mysqli_num_rows($notices) === 0): ?>
+                        <?php if (!$hasNotices): ?>
                         <div style="color:var(--text-muted); font-size:13px;">No notices.</div>
                         <?php endif; ?>
                     </div>
                 </div>
             </div>
 
-            <!-- QUICK ACTIONS -->
             <div class="card" style="margin-top:25px;">
                 <div class="card-header"><h3>⚡ Quick Actions</h3></div>
                 <div class="card-body" style="display:flex; gap:12px; flex-wrap:wrap;">

@@ -1,4 +1,3 @@
-// admin/departments.php ✅ UPDATED (CSRF delete + better error handling)
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth.php';
@@ -6,39 +5,47 @@ requireLogin('admin');
 
 $success = $error = '';
 
-/* ===== ADD ===== */
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_dept'])) {
-    $name      = sanitize($conn, $_POST['name']);
-    $code      = sanitize($conn, strtoupper($_POST['code']));
-    $head_name = sanitize($conn, $_POST['head_name']);
-
-    try {
-        $stmt = mysqli_prepare($conn, "INSERT INTO departments (name, code, head_name) VALUES (?, ?, ?)");
-        mysqli_stmt_bind_param($stmt, "sss", $name, $code, $head_name);
-        mysqli_stmt_execute($stmt);
-        $success = "Department added!";
-    } catch (Throwable $e) {
-        $error = "Error (maybe duplicate code): " . $e->getMessage();
-    }
-}
-
-/* ===== DELETE (POST + CSRF) ===== */
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
     if (!csrf_check($_POST['csrf_token'] ?? '')) {
-        $error = "Invalid request (CSRF).";
+        $error = 'Invalid request (CSRF).';
     } else {
-        $del_id = (int)$_POST['delete_id'];
-        try {
-            mysqli_query($conn, "DELETE FROM departments WHERE id=$del_id");
-            $success = "Department deleted.";
-        } catch (Throwable $e) {
-            // FK constraints can cause failure if you change schema to RESTRICT in future
-            $error = "Delete failed: " . $e->getMessage();
+        $name      = sanitize($conn, $_POST['name'] ?? '');
+        $code      = strtoupper(sanitize($conn, $_POST['code'] ?? ''));
+        $head_name = sanitize($conn, $_POST['head_name'] ?? '');
+
+        if ($name === '' || $code === '') {
+            $error = 'Department name and code are required.';
+        } elseif (!preg_match('/^[A-Z0-9\-]{2,10}$/', $code)) {
+            $error = 'Department code must be 2 to 10 characters using letters, numbers, or hyphen.';
+        } else {
+            try {
+                $stmt = mysqli_prepare($conn, 'INSERT INTO departments (name, code, head_name) VALUES (?, ?, ?)');
+                mysqli_stmt_bind_param($stmt, 'sss', $name, $code, $head_name);
+                mysqli_stmt_execute($stmt);
+                $success = 'Department added.';
+            } catch (Throwable $e) {
+                $error = 'Error (maybe duplicate code): ' . $e->getMessage();
+            }
         }
     }
 }
 
-/* ===== LIST ===== */
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_id'])) {
+    if (!csrf_check($_POST['csrf_token'] ?? '')) {
+        $error = 'Invalid request (CSRF).';
+    } else {
+        $del_id = (int)$_POST['delete_id'];
+        try {
+            $stmt = mysqli_prepare($conn, 'DELETE FROM departments WHERE id=?');
+            mysqli_stmt_bind_param($stmt, 'i', $del_id);
+            mysqli_stmt_execute($stmt);
+            $success = 'Department deleted.';
+        } catch (Throwable $e) {
+            $error = 'Delete failed: ' . $e->getMessage();
+        }
+    }
+}
+
 $departments = mysqli_query($conn, "
     SELECT d.*,
            COUNT(DISTINCT s.id) as student_count,
@@ -56,7 +63,7 @@ $departments = mysqli_query($conn, "
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="csrf-token" content="<?= htmlspecialchars(csrf_token()) ?>">
+    <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
     <title>Departments – CollegeMS</title>
     <link rel="stylesheet" href="../css/style.css">
 </head>
@@ -72,15 +79,15 @@ $departments = mysqli_query($conn, "
         </header>
 
         <div class="page-content">
-            <?php if ($success): ?><div class="alert alert-success"><?= $success ?></div><?php endif; ?>
-            <?php if ($error):   ?><div class="alert alert-danger"><?= htmlspecialchars($error) ?></div><?php endif; ?>
+            <?php if ($success): ?><div class="alert alert-success"><?= e($success) ?></div><?php endif; ?>
+            <?php if ($error): ?><div class="alert alert-danger"><?= e($error) ?></div><?php endif; ?>
 
             <div style="display:grid; grid-template-columns:1fr 2fr; gap:25px; align-items:start;">
-                <!-- ADD FORM -->
                 <div class="card">
                     <div class="card-header"><h3>🏛️ Add Department</h3></div>
                     <div class="card-body">
                         <form method="POST">
+                            <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                             <div class="form-group">
                                 <label>Department Name *</label>
                                 <input type="text" name="name" required placeholder="e.g. Computer Science">
@@ -98,7 +105,6 @@ $departments = mysqli_query($conn, "
                     </div>
                 </div>
 
-                <!-- LIST -->
                 <div class="card">
                     <div class="card-header"><h3>All Departments</h3></div>
                     <div class="table-responsive">
@@ -109,9 +115,9 @@ $departments = mysqli_query($conn, "
                             <tbody>
                             <?php while ($d = mysqli_fetch_assoc($departments)): ?>
                                 <tr>
-                                    <td><span class="chip chip-purple"><?= htmlspecialchars($d['code']) ?></span></td>
-                                    <td><strong><?= htmlspecialchars($d['name']) ?></strong></td>
-                                    <td><?= htmlspecialchars($d['head_name'] ?? '—') ?></td>
+                                    <td><span class="chip chip-purple"><?= e($d['code']) ?></span></td>
+                                    <td><strong><?= e($d['name']) ?></strong></td>
+                                    <td><?= e($d['head_name'] ?? '—') ?></td>
                                     <td><span class="chip chip-info"><?= (int)$d['student_count'] ?></span></td>
                                     <td><span class="chip chip-success"><?= (int)$d['faculty_count'] ?></span></td>
                                     <td><span class="chip chip-warning"><?= (int)$d['course_count'] ?></span></td>

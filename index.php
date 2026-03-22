@@ -1,4 +1,3 @@
-// index.php ✅ UPDATED (safe redirect)
 <?php
 require_once 'includes/auth.php';
 
