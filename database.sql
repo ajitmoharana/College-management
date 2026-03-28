@@ -148,24 +148,24 @@ CREATE TABLE notices (
 
 INSERT INTO users (name, email, password, role) VALUES
 ('AJ', 'adminaj@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin'),
-('Ajit Moharana', 'ajitmoharana515@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'faculty'),
-('Jyotirmayee Das', 'jyotirmayeedas.2005@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'faculty'),
-('Pratyush Tripathy', 'pratyushtripathy@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'student'),
-('Abhishek Agarwal', 'abhishekagarwal@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'student');
+('Jyotirmayee Das', 'jyotirmayeedas211@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'faculty'),
+('Sreeyasee Sahoo', 'sreeyaseesahoo@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'faculty'),
+('Ipsita Pradhan', 'ipsitapradhan@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'student'),
+('Diby arupa Behera', 'dibyarupabehera@gmail.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'student');
 
 INSERT INTO departments (name, code, head_name) VALUES
-('Computer Science', 'CS', 'Dr. Anil Kumar'),
-('Electronics Engineering', 'EE', 'Dr. Sunita Mishra'),
-('Mechanical Engineering', 'ME', 'Prof. Rajesh Nayak'),
-('Business Administration', 'BA', 'Dr. Priya Sharma');
+('Computer Science', 'CS', 'Dr. Ashwiprisha Das'),
+('Electronics Engineering', 'EE', 'Dr. Palak Priyadarshini'),
+('Mechanical Engineering', 'ME', 'Prof. Sai Sneha Barik'),
+('Business Administration', 'BA', 'Dr. Diptimayee Das');
 
 INSERT INTO faculty (user_id, faculty_id, name, email, department_id, designation, qualification, experience) VALUES
-(2, 'FAC0002', 'Ajit Moharana', 'ajitmoharana515@gmail.com', 1, 'Professor', 'PhD Computer Science', 10),
-(3, 'FAC0003', 'Jyotirmayee Das', 'jyotirmayeedas.2005@gmail.com', 1, 'Associate Professor', 'MPhil Mathematics', 7);
+(2, 'FAC0002', 'Jyotirmayee Das', 'jyotirmayeedas211@gmail.com', 1, 'Professor', 'PhD Computer Science', 10),
+(3, 'FAC0003', 'Sreeyasee Sahoo', 'sreeyaseesahoo@gmail.com', 1, 'Associate Professor', 'MPhil Mathematics', 7);
 
 INSERT INTO students (user_id, student_id, name, email, department_id, semester, admission_year) VALUES
-(4, 'STU0004', 'Pratyush Tripathy', 'pratyushtripathy@gmail.com', 1, 3, 2023),
-(5, 'STU0005', 'Abhishek Agarwal', 'abhishekagarwal@gmail.com', 1, 3, 2023);
+(4, 'STU0004', 'Ipsita Pradhan', 'ipsitapradhan@gmail.com', 1, 3, 2023),
+(5, 'STU0005', 'Diby arupa Behera', 'dibyarupabehera@gmail.com', 1, 3, 2023);
 
 INSERT INTO courses (course_code, course_name, department_id, faculty_id, semester, credits) VALUES
 ('CS101', 'Introduction to Programming', 1, 1, 1, 4),
