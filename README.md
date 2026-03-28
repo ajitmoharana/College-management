@@ -112,10 +112,10 @@ These accounts are for **local demo/testing only**.
 | Role    | Name              | Email                                                                 | Password |
 | ------- | ----------------- | --------------------------------------------------------------------- | -------- |
 | Admin   | AJ                | [adminaj@gmail.com](mailto:adminaj@gmail.com)                         | password |
-| Faculty | Ajit Moharana     | [ajitmoharana515@gmail.com](mailto:ajitmoharana515@gmail.com)         | password |
-| Faculty | Jyotirmayee Das   | [jyotirmayeedas.2005@gmail.com](mailto:jyotirmayeedas.2005@gmail.com) | password |
-| Student | Pratyush Tripathy | [pratyushtripathy@gmail.com](mailto:pratyushtripathy@gmail.com)       | password |
-| Student | Abhishek Agarwal  | [abhishekagarwal@gmail.com](mailto:abhishekagarwal@gmail.com)         | password |
+| Faculty | Jyotirmayee Das   | [jyotirmayeedas211@gmail.com](mailto:jyotirmayeedas211@gmail.com)     | password |
+| Faculty | Sreeyasee Sahoo   | [sreeyaseesahoo@gmail.com](mailto:sreeyaseesahoo@gmail.com)           | password |
+| Student | Ipsita Pradhan    | [ipsitapradhan@gmail.com](mailto:ipsitapradhan@gmail.com)             | password |
+| Student | Dibyarupa Behera  | [dibyarupabehera@gmail.com](mailto:dibyarupabehera@gmail.com)         | password |
 
 > The default password hash in `database.sql` is for the string `password`.
 
@@ -196,13 +196,13 @@ The system includes the following database tables:
 
 ### Faculty
 
-* Ajit Moharana
 * Jyotirmayee Das
+* Sreeyasee Sahoo
 
 ### Students
 
-* Pratyush Tripathy
-* Abhishek Agarwal
+* Ipsita Pradhan 
+* Dibyarupa Behera
 
 ### Courses
 
