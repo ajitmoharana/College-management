@@ -113,9 +113,6 @@ These accounts are for **local demo/testing only**.
 | ------- | ----------------- | --------------------------------------------------------------------- | -------- |
 | Admin   | AJ                | [adminaj@gmail.com](mailto:adminaj@gmail.com)                         | password |
 | Faculty | Jyotirmayee Das   | [jyotirmayeedas211@gmail.com](mailto:jyotirmayeedas211@gmail.com)     | password |
-| Faculty | Sreeyasee Sahoo   | [sreeyaseesahoo@gmail.com](mailto:sreeyaseesahoo@gmail.com)           | password |
-| Student | Ipsita Pradhan    | [ipsitapradhan@gmail.com](mailto:ipsitapradhan@gmail.com)             | password |
-| Student | Dibyarupa Behera  | [dibyarupabehera@gmail.com](mailto:dibyarupabehera@gmail.com)         | password |
 
 > The default password hash in `database.sql` is for the string `password`.
 
